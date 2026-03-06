@@ -1,11 +1,21 @@
 # Pixel Agents — Compressed Reference
 
-VS Code extension with embedded React webview: pixel art office where AI agents (Claude Code terminals) are animated characters.
+Pixel art office where AI agents (Claude Code sessions) are animated characters. Runs as a **standalone Node.js server** (primary) or a VS Code extension with embedded React webview.
+
+**Development focus**: New features should target the standalone version unless explicitly stated otherwise. The standalone server (`standalone/`) and shared modules (`src/types.ts`, `src/fileWatcher.ts`, `src/transcriptParser.ts`, `src/timerManager.ts`, `src/assetLoader.ts`, `src/layoutPersistence.ts`, `src/constants.ts`) are the primary codebase. The VS Code extension (`src/PixelAgentsViewProvider.ts`, `src/agentManager.ts`, `src/extension.ts`) is maintained but not the focus.
 
 ## Architecture
 
 ```
-src/                          — Extension backend (Node.js, VS Code API)
+standalone/                   — Standalone Node.js server (primary dev target)
+  server.ts                  — HTTP + WebSocket server, asset preloading, message dispatch
+  standaloneAgentManager.ts  — Agent lifecycle: add/remove sessions, status sync
+  projectScanner.ts          — Scans ~/.claude/projects/ for JSONL files, ps aux for live sessions
+  itermFocus.ts              — macOS: focus iTerm2 tab by session ID (osascript)
+  constants.ts               — Server port, scan intervals
+  types.ts                   — StandaloneAgentState (extends BaseAgentState)
+
+src/                          — Extension backend (Node.js, VS Code API) + shared modules
   constants.ts                — All backend magic numbers/strings (timing, truncation, asset parsing, VS Code IDs)
   extension.ts                — Entry: activate(), deactivate()
   PixelAgentsViewProvider.ts   — WebviewViewProvider, message dispatch, asset loading
@@ -69,15 +79,37 @@ scripts/                      — 7-stage asset extraction pipeline
   wall-tile-editor.html       — Browser UI for editing wall tile appearance
 ```
 
+## Standalone Mode
+
+**Entry point**: `standalone/server.ts` → bundled as `dist/standalone.js` via `node esbuild-standalone.js`.
+
+**Communication**: WebSocket at `ws://localhost:3333/ws` (not VS Code postMessage). `webview-ui/src/vscodeApi.ts` detects standalone mode (`acquireVsCodeApi` absent) and creates a WebSocket wrapper that dispatches incoming messages as `window.MessageEvent` — the existing `useExtensionMessages` hook works unchanged.
+
+**Agent discovery**: `ProjectScanner` scans `~/.claude/projects/` for JSONL files, checks `ps aux` for live `claude --session-id` processes. New JSONL files appearing during a live session are auto-adopted. No "+ Agent" button needed.
+
+**Agent lifecycle**: Auto-discovered from live processes. Removed when process dies (`STALE_CHECK_INTERVAL_MS = 5s` poll via `ps aux`). `StandaloneAgentManager` handles add/remove/status sync; delegates file watching to shared `startFileWatching()`.
+
+**Terminal focus**: `focusItermSession()` finds the TTY for a `claude --session-id <id>` process, then uses osascript to locate and select the matching iTerm2 tab.
+
+**Persistence**: `~/.pixel-agents/seats.json` (agent seat assignments) and `~/.pixel-agents/settings.json` (sound enabled) — plain JSON files written via `writeJson()`, not VS Code globalState. Layout uses the shared `~/.pixel-agents/layout.json` via `layoutPersistence.ts`.
+
+**Multi-client**: Broadcast WebSocket — `broadcastSink` sends to all connected `clients` Set. New clients receive full asset + agent state on `webviewReady`.
+
+**Shared code**: Reuses `src/fileWatcher.ts`, `src/transcriptParser.ts`, `src/timerManager.ts`, `src/assetLoader.ts`, `src/layoutPersistence.ts`, `src/types.ts`, `src/constants.ts`.
+
+**Not supported in standalone**: `openClaude`, `closeAgent`, `exportLayout`, `importLayout`, `openSessionsFolder` (no native dialogs).
+
 ## Core Concepts
 
-**Vocabulary**: Terminal = VS Code terminal running Claude. Session = JSONL conversation file. Agent = webview character bound 1:1 to a terminal.
+**Vocabulary**: Terminal = VS Code terminal (or iTerm2 session in standalone) running Claude. Session = JSONL conversation file. Agent = webview character bound 1:1 to a terminal/session.
 
-**Extension ↔ Webview**: `postMessage` protocol. Key messages: `openClaude`, `agentCreated/Closed`, `focusAgent`, `agentToolStart/Done/Clear`, `agentStatus`, `existingAgents`, `layoutLoaded`, `furnitureAssetsLoaded`, `floorTilesLoaded`, `wallTilesLoaded`, `saveLayout`, `saveAgentSeats`, `exportLayout`, `importLayout`, `settingsLoaded`, `setSoundEnabled`.
+**Extension ↔ Webview**: `postMessage` protocol (VS Code) or WebSocket (standalone). Key messages: `openClaude`, `agentCreated/Closed`, `focusAgent`, `agentToolStart/Done/Clear`, `agentStatus`, `existingAgents`, `layoutLoaded`, `furnitureAssetsLoaded`, `floorTilesLoaded`, `wallTilesLoaded`, `saveLayout`, `saveAgentSeats`, `exportLayout`, `importLayout`, `settingsLoaded`, `setSoundEnabled`.
 
-**One-agent-per-terminal**: Each "+ Agent" click → new terminal (`claude --session-id <uuid>`) → immediate agent creation → 1s poll for `<uuid>.jsonl` → file watching starts.
+**One-agent-per-terminal** (extension): Each "+ Agent" click → new terminal (`claude --session-id <uuid>`) → immediate agent creation → 1s poll for `<uuid>.jsonl` → file watching starts.
 
-**Terminal adoption**: Project-level 1s scan detects unknown JSONL files. If active terminal has no agent → adopt. If focused agent exists → reassign (`/clear` handling).
+**Auto-discovery** (standalone): `ProjectScanner` polls for new JSONL files (1s) and checks live processes (5s). Sessions appear/disappear automatically.
+
+**Terminal adoption** (extension): Project-level 1s scan detects unknown JSONL files. If active terminal has no agent → adopt. If focused agent exists → reassign (`/clear` handling).
 
 ## Agent Status Tracking
 
@@ -173,9 +205,14 @@ Toggle via "Layout" button. Tools: SELECT (default), Floor paint, Wall paint, Er
 ## Build & Dev
 
 ```sh
+# VS Code extension
 npm install && cd webview-ui && npm install && cd .. && npm run build
+# Standalone
+node esbuild-standalone.js && cd webview-ui && npm run build && cd ..
+node dist/standalone.js
 ```
-Build: type-check → lint → esbuild (extension) → vite (webview). F5 for Extension Dev Host.
+Extension build: type-check → lint → esbuild (extension) → vite (webview). F5 for Extension Dev Host.
+Standalone build: esbuild (server) + assets copy → `dist/standalone.js`; Vite (webview) → `dist/webview/`.
 
 ## TypeScript Constraints
 
