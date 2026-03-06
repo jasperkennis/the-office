@@ -7,6 +7,7 @@ interface AgentSidebarProps {
   officeState: OfficeState
   agents: number[]
   selectedAgent: number | null
+  onSelectAgent: (id: number | null) => void
   agentTools: Record<number, ToolActivity[]>
   agentStatuses: Record<number, string>
 }
@@ -84,6 +85,7 @@ export function AgentSidebar({
   officeState,
   agents,
   selectedAgent,
+  onSelectAgent,
   agentTools,
   agentStatuses,
 }: AgentSidebarProps) {
@@ -95,6 +97,7 @@ export function AgentSidebar({
   const handleClick = (id: number) => {
     officeState.selectedAgentId = id
     officeState.cameraFollowId = id
+    onSelectAgent(id)
     vscode.postMessage({ type: 'focusAgent', id })
   }
 

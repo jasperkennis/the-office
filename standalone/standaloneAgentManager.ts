@@ -98,10 +98,44 @@ export class StandaloneAgentManager {
 		this.delegatingSink.postMessage({ type: 'agentCreated', id, sessionId, folderName: projectName });
 
 		// Start watching from end of file (don't replay history)
+		// but peek at the tail to determine if the agent is currently active
 		try {
 			if (fs.existsSync(jsonlFile)) {
 				const stat = fs.statSync(jsonlFile);
 				agent.fileOffset = stat.size;
+
+				// Read last ~4KB to find the most recent record type
+				const peekSize = Math.min(4096, stat.size);
+				if (peekSize > 0) {
+					const buf = Buffer.alloc(peekSize);
+					const fd = fs.openSync(jsonlFile, 'r');
+					fs.readSync(fd, buf, 0, peekSize, stat.size - peekSize);
+					fs.closeSync(fd);
+					const lines = buf.toString('utf-8').split('\n').filter(l => l.trim());
+					// Walk backwards to find the last meaningful record
+					for (let i = lines.length - 1; i >= 0; i--) {
+						try {
+							const rec = JSON.parse(lines[i]);
+							if (rec.type === 'system' && rec.subtype === 'turn_duration') {
+								// Turn completed — agent is waiting for input
+								agent.isWaiting = true;
+								break;
+							} else if (rec.type === 'assistant') {
+								// Assistant was responding — agent is active
+								agent.hadToolsInTurn = true;
+								break;
+							} else if (rec.type === 'user') {
+								const content = rec.message?.content;
+								if (Array.isArray(content) && content.some((b: { type: string }) => b.type === 'tool_result')) {
+									// Tool result — agent is mid-loop, active
+									agent.hadToolsInTurn = true;
+								}
+								// User text prompt — could be start of new turn
+								break;
+							}
+						} catch { /* skip malformed */ }
+					}
+				}
 			}
 		} catch {
 			// File may not exist yet

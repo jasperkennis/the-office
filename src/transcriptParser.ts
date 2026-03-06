@@ -124,6 +124,14 @@ export function processTranscriptLine(
 				if (hasNonExemptTool) {
 					startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
 				}
+			} else if (blocks.some(b => b.type === 'thinking')) {
+				// Thinking block — the model is actively working. Cancel any
+				// pending waiting timer and ensure the agent appears active.
+				cancelWaitingTimer(agentId, waitingTimers);
+				if (agent.isWaiting) {
+					agent.isWaiting = false;
+					webview?.postMessage({ type: 'agentStatus', id: agentId, status: 'active' });
+				}
 			} else if (blocks.some(b => b.type === 'text') && !agent.hadToolsInTurn) {
 				// Text-only response in a turn that hasn't used any tools.
 				// turn_duration handles tool-using turns reliably but is never
@@ -202,11 +210,10 @@ export function processTranscriptLine(
 							}, TOOL_DONE_DELAY_MS);
 						}
 					}
-					// All tools completed — allow text-idle timer as fallback
-					// for turn-end detection when turn_duration is not emitted
-					if (agent.activeToolIds.size === 0) {
-						agent.hadToolsInTurn = false;
-					}
+					// Note: do NOT reset hadToolsInTurn here. The agent is still
+					// in the middle of an agentic loop — text blocks between tool
+					// calls are normal and should not trigger the text-idle timer.
+					// hadToolsInTurn is only reset by turn_duration or new user prompt.
 				} else {
 					// New user text prompt — new turn starting
 					cancelWaitingTimer(agentId, waitingTimers);

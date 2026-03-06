@@ -26,7 +26,7 @@ function defaultZoom(): number {
 }
 
 function App() {
-  const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, workspaceFolders, agentConversation } = useExtensionMessages(getOfficeState)
+  const { agents, selectedAgent, selectAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, workspaceFolders, agentConversation } = useExtensionMessages(getOfficeState)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [zoom, setZoom] = useState(defaultZoom)
@@ -47,8 +47,9 @@ function App() {
     const os = getOfficeState()
     const meta = os.subagentMeta.get(agentId)
     const focusId = meta ? meta.parentAgentId : agentId
+    selectAgent(focusId)
     vscode.postMessage({ type: 'focusAgent', id: focusId })
-  }, [])
+  }, [selectAgent])
 
   const handleOpenClaude = useCallback(() => {
     vscode.postMessage({ type: 'openClaude' })
@@ -124,6 +125,7 @@ function App() {
         officeState={officeState}
         agents={agents}
         selectedAgent={selectedAgent}
+        onSelectAgent={selectAgent}
         agentTools={agentTools}
         agentStatuses={agentStatuses}
       />
