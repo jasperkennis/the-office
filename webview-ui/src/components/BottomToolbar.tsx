@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { SettingsModal } from './SettingsModal.js'
 import type { WorkspaceFolder } from '../hooks/useExtensionMessages.js'
-import { vscode } from '../vscodeApi.js'
+import { vscode, isStandalone } from '../vscodeApi.js'
 
 interface BottomToolbarProps {
   isEditMode: boolean
@@ -87,6 +87,17 @@ export function BottomToolbar({
 
   return (
     <div style={panelStyle}>
+      {isStandalone ? (
+        <span
+          style={{
+            padding: '5px 12px',
+            fontSize: '24px',
+            color: 'var(--pixel-text-dim)',
+          }}
+        >
+          Watching...
+        </span>
+      ) : (
       <div ref={folderPickerRef} style={{ position: 'relative' }}>
         <button
           onClick={handleAgentClick}
@@ -146,6 +157,7 @@ export function BottomToolbar({
           </div>
         )}
       </div>
+      )}
       <button
         onClick={onToggleEditMode}
         onMouseEnter={() => setHovered('edit')}

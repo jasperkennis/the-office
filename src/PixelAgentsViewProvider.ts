@@ -12,7 +12,7 @@ import {
 	sendLayout,
 	getProjectDirPath,
 } from './agentManager.js';
-import { ensureProjectScan } from './fileWatcher.js';
+import { ensureProjectScan } from './vscodeFileScanner.js';
 import { loadFurnitureAssets, sendAssetsToWebview, loadFloorTiles, sendFloorTilesToWebview, loadWallTiles, sendWallTilesToWebview, loadCharacterSprites, sendCharacterSpritesToWebview, loadDefaultLayout } from './assetLoader.js';
 import { WORKSPACE_KEY_AGENT_SEATS, GLOBAL_KEY_SOUND_ENABLED } from './constants.js';
 import { writeLayoutToFile, readLayoutFromFile, watchLayoutFile } from './layoutPersistence.js';

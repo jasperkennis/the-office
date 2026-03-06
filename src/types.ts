@@ -1,8 +1,13 @@
 import type * as vscode from 'vscode';
 
-export interface AgentState {
+/** Generic message target — implemented by vscode.Webview and standalone WebSocket wrappers */
+export interface MessageSink {
+	postMessage(msg: unknown): void;
+}
+
+/** Agent state fields shared between extension and standalone modes (everything except terminalRef) */
+export interface BaseAgentState {
 	id: number;
-	terminalRef: vscode.Terminal;
 	projectDir: string;
 	jsonlFile: string;
 	fileOffset: number;
@@ -17,6 +22,10 @@ export interface AgentState {
 	hadToolsInTurn: boolean;
 	/** Workspace folder name (only set for multi-root workspaces) */
 	folderName?: string;
+}
+
+export interface AgentState extends BaseAgentState {
+	terminalRef: vscode.Terminal;
 }
 
 export interface PersistedAgent {

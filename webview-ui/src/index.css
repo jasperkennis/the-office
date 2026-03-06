@@ -42,7 +42,7 @@
   /* Vignette */
   --pixel-vignette: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.6) 100%);
 
-  /* Status dot colors */
+  /* Status dot colors (fallbacks for standalone browser mode) */
   --pixel-status-permission: var(--vscode-charts-yellow, #cca700);
   --pixel-status-active: var(--vscode-charts-blue, #3794ff);
 
@@ -58,6 +58,8 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   font-family: 'FS Pixel Sans', sans-serif;
+  background-color: var(--vscode-editor-background, #1e1e2e);
+  color: var(--vscode-foreground, rgba(255, 255, 255, 0.8));
 }
 
 * {

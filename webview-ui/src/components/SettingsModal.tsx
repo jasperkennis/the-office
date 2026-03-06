@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { vscode } from '../vscodeApi.js'
+import { vscode, isStandalone } from '../vscodeApi.js'
 import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js'
 
 interface SettingsModalProps {
@@ -92,6 +92,7 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
           </button>
         </div>
         {/* Menu items */}
+        {!isStandalone && (
         <button
           onClick={() => {
             vscode.postMessage({ type: 'openSessionsFolder' })
@@ -106,6 +107,7 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
         >
           Open Sessions Folder
         </button>
+        )}
         <button
           onClick={() => {
             vscode.postMessage({ type: 'exportLayout' })
