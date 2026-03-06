@@ -27,3 +27,5 @@ Sometimes I'll start a coding session and I don't even know where it's going. I 
 ## License
 
 This project is licensed under the [MIT License](LICENSE). I'm not superstitious, but I am a little stitious about open source.
+
+![The Office](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExODg5bHdwNzE5YzBwejlkcnd5cGt2cjA4OW9heG1waHFvcDBoaDdoaSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/BY8ORoRpnJDXeBNwxg/giphy.gif)
