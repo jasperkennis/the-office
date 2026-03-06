@@ -257,6 +257,7 @@ function handleClientMessage(
 			type: 'existingAgents',
 			agents: agentIds,
 			agentMeta,
+			sessionIds: agentManager.getSessionIds(),
 			folderNames,
 		}));
 

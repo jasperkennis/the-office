@@ -101,7 +101,7 @@ export const ROOM_LABEL_COLOR = 'rgba(255, 255, 255, 0.65)'
 
 // ── Character Names ─────────────────────────────────────────
 export const NAME_VERTICAL_OFFSET_PX = 27
-export const NAME_FONT_SIZE_PX = 5
+export const NAME_FONT_SIZE_PX = 6
 export const NAME_COLOR = 'rgba(255, 255, 255, 0.85)'
 export const NAME_SHADOW_COLOR = 'rgba(0, 0, 0, 0.7)'
 export const AGENT_NAME_POOL = [

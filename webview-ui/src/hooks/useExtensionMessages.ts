@@ -77,7 +77,23 @@ export function useExtensionMessages(
 
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
-    let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
+    let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; name?: string; sessionId?: string; folderName?: string }> = []
+
+    // Cached metadata from seats.json (keyed by sessionId)
+    let cachedMeta: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }> = {}
+
+    /** Save all non-sub-agent character metadata keyed by sessionId */
+    function saveAgentMeta(os: OfficeState): void {
+      const seats: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }> = {}
+      for (const ch of os.characters.values()) {
+        if (ch.isSubagent || !ch.sessionId) continue
+        seats[ch.sessionId] = { name: ch.name, palette: ch.palette, hueShift: ch.hueShift, seatId: ch.seatId ?? undefined }
+      }
+      // Merge with cached meta to preserve data for offline agents
+      const merged = { ...cachedMeta, ...seats }
+      cachedMeta = merged
+      vscode.postMessage({ type: 'saveAgentSeats', seats: merged })
+    }
 
     const handler = (e: MessageEvent) => {
       const msg = e.data
@@ -89,19 +105,24 @@ export function useExtensionMessages(
         // Generate room layout from known projects and buffered agents
         // First add buffered agents so their project names are counted
         for (const p of pendingAgents) {
-          os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName)
+          os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName, p.sessionId, p.name)
         }
         pendingAgents = []
         os.regenerateRoomLayout(knownProjectsRef.current)
+        saveAgentMeta(os)
         layoutReadyRef.current = true
         setLayoutReady(true)
       } else if (msg.type === 'agentCreated') {
         const id = msg.id as number
+        const sessionId = msg.sessionId as string | undefined
         const folderName = msg.folderName as string | undefined
+        // Check cached metadata for returning sessions
+        const m = sessionId ? cachedMeta[sessionId] : undefined
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
         setSelectedAgent(id)
-        os.addAgent(id, undefined, undefined, undefined, undefined, folderName)
+        os.addAgent(id, m?.palette, m?.hueShift, m?.seatId, undefined, folderName, sessionId, m?.name)
         os.regenerateRoomLayout(knownProjectsRef.current)
+        saveAgentMeta(os)
       } else if (msg.type === 'agentClosed') {
         const id = msg.id as number
         setAgents((prev) => prev.filter((a) => a !== id))
@@ -131,12 +152,17 @@ export function useExtensionMessages(
         os.regenerateRoomLayout(knownProjectsRef.current)
       } else if (msg.type === 'existingAgents') {
         const incoming = msg.agents as number[]
-        const meta = (msg.agentMeta || {}) as Record<number, { palette?: number; hueShift?: number; seatId?: string }>
+        const meta = (msg.agentMeta || {}) as Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }>
+        const sessionIds = (msg.sessionIds || {}) as Record<number, string>
         const folderNames = (msg.folderNames || {}) as Record<number, string>
+        // Cache metadata for later lookups (e.g. new agents arriving with known sessionId)
+        cachedMeta = { ...cachedMeta, ...meta }
         // Buffer agents — they'll be added in layoutLoaded after seats are built
         for (const id of incoming) {
-          const m = meta[id]
-          pendingAgents.push({ id, palette: m?.palette, hueShift: m?.hueShift, seatId: m?.seatId, folderName: folderNames[id] })
+          const sid = sessionIds[id]
+          // Try sessionId-keyed metadata first, fall back to agentId-keyed (extension compat)
+          const m = (sid ? meta[sid] : undefined) || meta[id]
+          pendingAgents.push({ id, palette: m?.palette, hueShift: m?.hueShift, seatId: m?.seatId, name: m?.name, sessionId: sid, folderName: folderNames[id] })
         }
         setAgents((prev) => {
           const ids = new Set(prev)

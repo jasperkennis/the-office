@@ -294,7 +294,7 @@ export class OfficeState {
     return { palette, hueShift }
   }
 
-  addAgent(id: number, preferredPalette?: number, preferredHueShift?: number, preferredSeatId?: string, skipSpawnEffect?: boolean, folderName?: string): void {
+  addAgent(id: number, preferredPalette?: number, preferredHueShift?: number, preferredSeatId?: string, skipSpawnEffect?: boolean, folderName?: string, sessionId?: string, preferredName?: string): void {
     if (this.characters.has(id)) return
 
     let palette: number
@@ -323,7 +323,7 @@ export class OfficeState {
       seatId = this.findFreeSeat()
     }
 
-    const name = this.pickName()
+    const name = preferredName || this.pickName()
 
     let ch: Character
     if (seatId) {
@@ -342,6 +342,9 @@ export class OfficeState {
       ch.tileRow = spawn.row
     }
 
+    if (sessionId) {
+      ch.sessionId = sessionId
+    }
     if (folderName) {
       ch.folderName = folderName
       ch.projectName = folderName

@@ -199,4 +199,6 @@ export interface Character {
   folderName?: string
   /** Project name for room assignment */
   projectName?: string
+  /** Session ID for metadata persistence (stable across restarts) */
+  sessionId?: string
 }

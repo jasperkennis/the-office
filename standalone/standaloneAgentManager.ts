@@ -70,7 +70,7 @@ export class StandaloneAgentManager {
 		this.fileToAgent.set(jsonlFile, id);
 
 		console.log(`[Standalone] Agent ${id}: tracking ${projectName}/${sessionId}`);
-		this.delegatingSink.postMessage({ type: 'agentCreated', id, folderName: projectName });
+		this.delegatingSink.postMessage({ type: 'agentCreated', id, sessionId, folderName: projectName });
 
 		// Start watching from end of file (don't replay history)
 		try {
@@ -117,6 +117,14 @@ export class StandaloneAgentManager {
 
 	getExistingAgentIds(): number[] {
 		return [...this.agents.keys()].sort((a, b) => a - b);
+	}
+
+	getSessionIds(): Record<number, string> {
+		const result: Record<number, string> = {};
+		for (const [id, agent] of this.agents) {
+			result[id] = agent.sessionId;
+		}
+		return result;
 	}
 
 	getSessionIdForAgent(agentId: number): string | null {
