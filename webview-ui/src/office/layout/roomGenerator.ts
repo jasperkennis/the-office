@@ -1,5 +1,5 @@
-import { TileType, FurnitureType } from '../types.js'
-import type { TileType as TileTypeVal, OfficeLayout, PlacedFurniture, FloorColor } from '../types.js'
+import { TileType, FurnitureType, Direction } from '../types.js'
+import type { TileType as TileTypeVal, OfficeLayout, PlacedFurniture, FloorColor, ActivitySpot } from '../types.js'
 import {
   ROOM_HEIGHT,
   ROOM_LABEL_ROWS,
@@ -18,6 +18,7 @@ export interface RoomInfo {
   width: number
   height: number
   seatUids: string[]
+  activitySpots: ActivitySpot[]
 }
 
 export interface GeneratedLayout {
@@ -138,20 +139,83 @@ export function generateRoomLayout(
       }
     }
 
-    // Place plants at interior corners for decoration
-    // Top-left corner (row 1, col 1 relative to room)
+    // Place activity props
+    const activitySpots: ActivitySpot[] = []
+
+    // BOOKSHELF (1x2) at left wall interior — replaces left plant
     furniture.push({
-      uid: `${spec.name}:plant-0`,
-      type: FurnitureType.PLANT,
+      uid: `${spec.name}:bookshelf`,
+      type: FurnitureType.BOOKSHELF,
       col: roomCol + 1,
       row: roomRow + 1,
     })
-    // Top-right corner
+    // Bookshelf activity spots: below it and to its right
+    activitySpots.push({
+      uid: `${spec.name}:bookshelf-spot-0`,
+      toolCategory: 'file_research',
+      standCol: roomCol + 1,
+      standRow: roomRow + 3,
+      facingDir: Direction.UP,
+      occupiedBy: null,
+    })
+    activitySpots.push({
+      uid: `${spec.name}:bookshelf-spot-1`,
+      toolCategory: 'file_research',
+      standCol: roomCol + 2,
+      standRow: roomRow + 1,
+      facingDir: Direction.LEFT,
+      occupiedBy: null,
+    })
+
+    // PC (1x1) at right wall interior — replaces right plant
     furniture.push({
-      uid: `${spec.name}:plant-1`,
-      type: FurnitureType.PLANT,
+      uid: `${spec.name}:pc`,
+      type: FurnitureType.PC,
       col: roomCol + spec.roomWidth - 2,
       row: roomRow + 1,
+    })
+    // PC activity spots: to its left and below it
+    activitySpots.push({
+      uid: `${spec.name}:pc-spot-0`,
+      toolCategory: 'web_research',
+      standCol: roomCol + spec.roomWidth - 3,
+      standRow: roomRow + 1,
+      facingDir: Direction.RIGHT,
+      occupiedBy: null,
+    })
+    activitySpots.push({
+      uid: `${spec.name}:pc-spot-1`,
+      toolCategory: 'web_research',
+      standCol: roomCol + spec.roomWidth - 2,
+      standRow: roomRow + 2,
+      facingDir: Direction.UP,
+      occupiedBy: null,
+    })
+
+    // WHITEBOARD (2x1) centered on top wall
+    const wbCol = roomCol + Math.floor(spec.roomWidth / 2) - 1
+    furniture.push({
+      uid: `${spec.name}:whiteboard`,
+      type: FurnitureType.WHITEBOARD,
+      col: wbCol,
+      row: roomRow,
+    })
+    // Whiteboard activity spots: two tiles below it
+    activitySpots.push({
+      uid: `${spec.name}:whiteboard-spot-0`,
+      toolCategory: 'planning',
+      standCol: wbCol,
+      standRow: roomRow + 1,
+      facingDir: Direction.UP,
+      occupiedBy: null,
+    })
+    activitySpots.push({
+      uid: `${spec.name}:whiteboard-spot-1`,
+      toolCategory: 'planning',
+      standCol: wbCol + 1,
+      standRow: roomRow + 1,
+      facingDir: Direction.UP,
+      occupiedBy: null,
     })
 
     rooms.push({
@@ -161,6 +225,7 @@ export function generateRoomLayout(
       width: spec.roomWidth,
       height: ROOM_HEIGHT,
       seatUids,
+      activitySpots,
     })
 
     colOffset += spec.roomWidth + ROOM_GAP_COLS

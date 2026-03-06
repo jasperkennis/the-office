@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { BaseAgentState, MessageSink } from './types.js';
+import type { BaseAgentState, MessageSink, ConversationEntry } from './types.js';
 import {
 	cancelWaitingTimer,
 	startWaitingTimer,
@@ -12,6 +12,8 @@ import {
 	TEXT_IDLE_DELAY_MS,
 	BASH_COMMAND_DISPLAY_MAX_LENGTH,
 	TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
+	CONVERSATION_TEXT_MAX_LENGTH,
+	CONVERSATION_TOOL_RESULT_MAX_LENGTH,
 } from './constants.js';
 
 export const PERMISSION_EXEMPT_TOOLS = new Set(['Task', 'AskUserQuestion']);
@@ -41,6 +43,19 @@ export function formatToolStatus(toolName: string, input: Record<string, unknown
 	}
 }
 
+function truncate(s: string, max: number): string {
+	return s.length > max ? s.slice(0, max) + '\u2026' : s;
+}
+
+function emitConversationEntries(
+	agentId: number,
+	entries: ConversationEntry[],
+	webview: MessageSink | undefined,
+): void {
+	if (entries.length === 0 || !webview) return;
+	webview.postMessage({ type: 'agentConversation', id: agentId, entries });
+}
+
 export function processTranscriptLine(
 	agentId: number,
 	line: string,
@@ -56,9 +71,30 @@ export function processTranscriptLine(
 
 		if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
 			const blocks = record.message.content as Array<{
-				type: string; id?: string; name?: string; input?: Record<string, unknown>;
+				type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string;
 			}>;
 			const hasToolUse = blocks.some(b => b.type === 'tool_use');
+
+			// Emit conversation entries for assistant content
+			const convEntries: ConversationEntry[] = [];
+			for (const block of blocks) {
+				if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+					convEntries.push({
+						kind: 'assistant_text',
+						content: truncate(block.text.trim(), CONVERSATION_TEXT_MAX_LENGTH),
+					});
+				} else if (block.type === 'tool_use' && block.id) {
+					const toolName = block.name || '';
+					const status = formatToolStatus(toolName, block.input || {});
+					convEntries.push({
+						kind: 'tool_use',
+						content: status,
+						toolId: block.id,
+						toolName,
+					});
+				}
+			}
+			emitConversationEntries(agentId, convEntries, webview);
 
 			if (hasToolUse) {
 				cancelWaitingTimer(agentId, waitingTimers);
@@ -100,8 +136,44 @@ export function processTranscriptLine(
 		} else if (record.type === 'user') {
 			const content = record.message?.content;
 			if (Array.isArray(content)) {
-				const blocks = content as Array<{ type: string; tool_use_id?: string }>;
+				const blocks = content as Array<{ type: string; tool_use_id?: string; content?: unknown }>;
 				const hasToolResult = blocks.some(b => b.type === 'tool_result');
+
+				// Emit conversation entries for user content
+				const userConvEntries: ConversationEntry[] = [];
+				if (hasToolResult) {
+					for (const block of blocks) {
+						if (block.type === 'tool_result' && block.tool_use_id) {
+							let resultText = '';
+							if (typeof block.content === 'string') {
+								resultText = block.content;
+							} else if (Array.isArray(block.content)) {
+								const textParts = (block.content as Array<{ type: string; text?: string }>)
+									.filter(p => p.type === 'text' && p.text)
+									.map(p => p.text as string);
+								resultText = textParts.join('\n');
+							}
+							userConvEntries.push({
+								kind: 'tool_result',
+								content: truncate(resultText, CONVERSATION_TOOL_RESULT_MAX_LENGTH),
+								toolId: block.tool_use_id,
+							});
+						}
+					}
+				} else {
+					// User text from array (non-tool_result blocks)
+					const textParts = (blocks as Array<{ type: string; text?: string }>)
+						.filter(b => b.type === 'text' && b.text)
+						.map(b => b.text as string);
+					if (textParts.length > 0) {
+						userConvEntries.push({
+							kind: 'user_text',
+							content: truncate(textParts.join('\n'), CONVERSATION_TEXT_MAX_LENGTH),
+						});
+					}
+				}
+				emitConversationEntries(agentId, userConvEntries, webview);
+
 				if (hasToolResult) {
 					for (const block of blocks) {
 						if (block.type === 'tool_result' && block.tool_use_id) {
@@ -143,11 +215,16 @@ export function processTranscriptLine(
 				}
 			} else if (typeof content === 'string' && content.trim()) {
 				// New user text prompt — new turn starting
+				emitConversationEntries(agentId, [{
+					kind: 'user_text',
+					content: truncate(content.trim(), CONVERSATION_TEXT_MAX_LENGTH),
+				}], webview);
 				cancelWaitingTimer(agentId, waitingTimers);
 				clearAgentActivity(agent, agentId, permissionTimers, webview);
 				agent.hadToolsInTurn = false;
 			}
 		} else if (record.type === 'system' && record.subtype === 'turn_duration') {
+			emitConversationEntries(agentId, [{ kind: 'turn_end', content: '' }], webview);
 			cancelWaitingTimer(agentId, waitingTimers);
 			cancelPermissionTimer(agentId, permissionTimers);
 

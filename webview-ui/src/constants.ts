@@ -135,6 +135,22 @@ export const NOTIFICATION_NOTE_2_START_SEC = 0.1
 export const NOTIFICATION_NOTE_DURATION_SEC = 0.18
 export const NOTIFICATION_VOLUME = 0.14
 
+// ── Activity Props ──────────────────────────────────────────
+/** Maps tool names to activity categories for prop-based routing */
+export const TOOL_ACTIVITY_CATEGORY: Record<string, string> = {
+  Read: 'file_research',
+  Grep: 'file_research',
+  Glob: 'file_research',
+  WebFetch: 'web_research',
+  WebSearch: 'web_research',
+  Task: 'planning',
+}
+
+// ── Conversation Panel ──────────────────────────────────────
+export const CONVERSATION_PANEL_MIN_HEIGHT = 120
+export const CONVERSATION_PANEL_DEFAULT_HEIGHT = 200
+export const CONVERSATION_MAX_ENTRIES = 500
+
 // ── Game Logic ───────────────────────────────────────────────
 export const MAX_DELTA_TIME_SEC = 0.1
 export const WAITING_BUBBLE_DURATION_SEC = 2.0

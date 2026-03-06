@@ -15,8 +15,9 @@ import {
   CHARACTER_HIT_HALF_WIDTH,
   CHARACTER_HIT_HEIGHT,
   AGENT_NAME_POOL,
+  TOOL_ACTIVITY_CATEGORY,
 } from '../../constants.js'
-import type { Character, Seat, FurnitureInstance, TileType as TileTypeVal, OfficeLayout, PlacedFurniture } from '../types.js'
+import type { Character, Seat, FurnitureInstance, TileType as TileTypeVal, OfficeLayout, PlacedFurniture, ActivitySpot } from '../types.js'
 import { createCharacter, updateCharacter } from './characters.js'
 import { matrixEffectSeeds } from './matrixEffect.js'
 import { isWalkable, getWalkableTiles, findPath } from '../layout/tileMap.js'
@@ -51,6 +52,8 @@ export class OfficeState {
   rooms: RoomInfo[] = []
   /** Maps project name → seat UIDs in that project's room */
   projectSeats: Map<string, string[]> = new Map()
+  /** All activity spots from generated rooms */
+  activitySpots: ActivitySpot[] = []
 
   constructor(layout?: OfficeLayout) {
     this.layout = layout || createDefaultLayout()
@@ -186,6 +189,35 @@ export class OfficeState {
     return this.findFreeSeat()
   }
 
+  /** Find an unoccupied activity spot for the given tool category in the character's room */
+  private findActivitySpot(ch: Character, toolCategory: string): ActivitySpot | null {
+    // Determine which room the character belongs to via their seat
+    const projectName = ch.projectName || ch.folderName || ''
+    const projectSeatUids = this.projectSeats.get(projectName)
+    if (!projectSeatUids) return null
+
+    // Find room matching this project
+    const room = this.rooms.find((r) => r.projectName === projectName)
+    if (!room) return null
+
+    // Find an unoccupied spot in this room matching the tool category
+    for (const spot of room.activitySpots) {
+      if (spot.toolCategory === toolCategory && spot.occupiedBy === null) {
+        return spot
+      }
+    }
+    return null
+  }
+
+  /** Release any activity spot occupied by the given character */
+  private releaseActivitySpot(characterId: number): void {
+    for (const spot of this.activitySpots) {
+      if (spot.occupiedBy === characterId) {
+        spot.occupiedBy = null
+      }
+    }
+  }
+
   /** Regenerate the room layout from known projects and current agents */
   regenerateRoomLayout(
     knownProjects: Array<{ name: string; workspacePath: string }>,
@@ -220,8 +252,10 @@ export class OfficeState {
     // Store room metadata
     this.rooms = rooms
     this.projectSeats.clear()
+    this.activitySpots = []
     for (const room of rooms) {
       this.projectSeats.set(room.projectName, room.seatUids)
+      this.activitySpots.push(...room.activitySpots)
     }
 
     // Rebuild layout (this handles seat reassignment)
@@ -361,7 +395,8 @@ export class OfficeState {
     const ch = this.characters.get(id)
     if (!ch) return
     if (ch.matrixEffect === 'despawn') return // already despawning
-    // Free seat and clear selection immediately
+    // Free seat and activity spot, clear selection immediately
+    this.releaseActivitySpot(id)
     if (ch.seatId) {
       const seat = this.seats.get(ch.seatId)
       if (seat) seat.assigned = false
@@ -611,6 +646,10 @@ export class OfficeState {
     if (ch) {
       ch.isActive = active
       if (!active) {
+        // Release activity spot if occupied
+        this.releaseActivitySpot(id)
+        ch.atActivitySpot = false
+        ch.activityTarget = null
         // Sentinel -1: signals turn just ended, skip next seat rest timer.
         // Prevents the WALK handler from setting a 2-4 min rest on arrival.
         ch.seatTimer = -1
@@ -683,8 +722,64 @@ export class OfficeState {
 
   setAgentTool(id: number, tool: string | null): void {
     const ch = this.characters.get(id)
-    if (ch) {
-      ch.currentTool = tool
+    if (!ch) return
+    ch.currentTool = tool
+
+    // Determine new activity category
+    const newCategory = tool ? TOOL_ACTIVITY_CATEGORY[tool] ?? null : null
+    const oldCategory = ch.activityTarget?.toolCategory ?? null
+
+    // If category hasn't changed, no rerouting needed
+    if (newCategory === oldCategory) return
+
+    // Release old activity spot
+    this.releaseActivitySpot(id)
+    ch.atActivitySpot = false
+    ch.activityTarget = null
+
+    if (newCategory && ch.isActive) {
+      // Try to find an activity spot for the new category
+      const spot = this.findActivitySpot(ch, newCategory)
+      if (spot) {
+        spot.occupiedBy = id
+        ch.activityTarget = spot
+        // Pathfind to spot
+        const path = this.withOwnSeatUnblocked(ch, () =>
+          findPath(ch.tileCol, ch.tileRow, spot.standCol, spot.standRow, this.tileMap, this.blockedTiles)
+        )
+        if (path.length > 0) {
+          ch.path = path
+          ch.moveProgress = 0
+          ch.state = CharacterState.WALK
+          ch.frame = 0
+          ch.frameTimer = 0
+        } else {
+          // Already at spot or no path — face the prop
+          ch.state = CharacterState.TYPE
+          ch.dir = spot.facingDir
+          ch.atActivitySpot = true
+          ch.frame = 0
+          ch.frameTimer = 0
+        }
+        return
+      }
+    }
+
+    // No category or no spot → fall back to seat
+    if (ch.isActive && ch.seatId) {
+      const seat = this.seats.get(ch.seatId)
+      if (seat) {
+        const path = this.withOwnSeatUnblocked(ch, () =>
+          findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, this.tileMap, this.blockedTiles)
+        )
+        if (path.length > 0) {
+          ch.path = path
+          ch.moveProgress = 0
+          ch.state = CharacterState.WALK
+          ch.frame = 0
+          ch.frameTimer = 0
+        }
+      }
     }
   }
 
@@ -776,8 +871,8 @@ export class OfficeState {
       // Skip characters that are despawning
       if (ch.matrixEffect === 'despawn') continue
       // Character sprite is 16x24, anchored bottom-center
-      // Apply sitting offset to match visual position
-      const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0
+      // Apply sitting offset to match visual position (not at activity spots)
+      const sittingOffset = ch.state === CharacterState.TYPE && !ch.atActivitySpot ? CHARACTER_SITTING_OFFSET_PX : 0
       const anchorY = ch.y + sittingOffset
       const left = ch.x - CHARACTER_HIT_HALF_WIDTH
       const right = ch.x + CHARACTER_HIT_HALF_WIDTH

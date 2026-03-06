@@ -80,6 +80,8 @@ export function createCharacter(
     matrixEffect: null,
     matrixEffectTimer: 0,
     matrixEffectSeeds: [],
+    atActivitySpot: false,
+    activityTarget: null,
   }
 }
 
@@ -101,6 +103,18 @@ export function updateCharacter(
       }
       // If no longer active, stand up and start wandering (after seatTimer expires)
       if (!ch.isActive) {
+        // At activity spot: skip seat rest, transition immediately
+        if (ch.atActivitySpot) {
+          ch.atActivitySpot = false
+          ch.activityTarget = null
+          ch.state = CharacterState.IDLE
+          ch.frame = 0
+          ch.frameTimer = 0
+          ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC)
+          ch.wanderCount = 0
+          ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX)
+          break
+        }
         if (ch.seatTimer > 0) {
           ch.seatTimer -= dt
           break
@@ -120,8 +134,28 @@ export function updateCharacter(
       // No idle animation — static pose
       ch.frame = 0
       if (ch.seatTimer < 0) ch.seatTimer = 0 // clear turn-end sentinel
-      // If became active, pathfind to seat
+      // If became active, pathfind to activity target or seat
       if (ch.isActive) {
+        // Activity target takes priority over seat
+        if (ch.activityTarget) {
+          const spot = ch.activityTarget
+          const path = findPath(ch.tileCol, ch.tileRow, spot.standCol, spot.standRow, tileMap, blockedTiles)
+          if (path.length > 0) {
+            ch.path = path
+            ch.moveProgress = 0
+            ch.state = CharacterState.WALK
+            ch.frame = 0
+            ch.frameTimer = 0
+          } else {
+            // Already at spot or no path — stand and face prop
+            ch.state = CharacterState.TYPE
+            ch.dir = spot.facingDir
+            ch.atActivitySpot = true
+            ch.frame = 0
+            ch.frameTimer = 0
+          }
+          break
+        }
         if (!ch.seatId) {
           // No seat assigned — type in place
           ch.state = CharacterState.TYPE
@@ -197,7 +231,17 @@ export function updateCharacter(
         ch.y = center.y
 
         if (ch.isActive) {
-          if (!ch.seatId) {
+          // Check activity target first
+          if (ch.activityTarget) {
+            const spot = ch.activityTarget
+            if (ch.tileCol === spot.standCol && ch.tileRow === spot.standRow) {
+              ch.state = CharacterState.TYPE
+              ch.dir = spot.facingDir
+              ch.atActivitySpot = true
+            } else {
+              ch.state = CharacterState.IDLE
+            }
+          } else if (!ch.seatId) {
             // No seat — type in place
             ch.state = CharacterState.TYPE
           } else {
@@ -260,16 +304,28 @@ export function updateCharacter(
         ch.moveProgress = 0
       }
 
-      // If became active while wandering, repath to seat
-      if (ch.isActive && ch.seatId) {
-        const seat = seats.get(ch.seatId)
-        if (seat) {
+      // If became active while wandering, repath to activity target or seat
+      if (ch.isActive) {
+        if (ch.activityTarget) {
+          const spot = ch.activityTarget
           const lastStep = ch.path[ch.path.length - 1]
-          if (!lastStep || lastStep.col !== seat.seatCol || lastStep.row !== seat.seatRow) {
-            const newPath = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles)
+          if (!lastStep || lastStep.col !== spot.standCol || lastStep.row !== spot.standRow) {
+            const newPath = findPath(ch.tileCol, ch.tileRow, spot.standCol, spot.standRow, tileMap, blockedTiles)
             if (newPath.length > 0) {
               ch.path = newPath
               ch.moveProgress = 0
+            }
+          }
+        } else if (ch.seatId) {
+          const seat = seats.get(ch.seatId)
+          if (seat) {
+            const lastStep = ch.path[ch.path.length - 1]
+            if (!lastStep || lastStep.col !== seat.seatCol || lastStep.row !== seat.seatRow) {
+              const newPath = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles)
+              if (newPath.length > 0) {
+                ch.path = newPath
+                ch.moveProgress = 0
+              }
             }
           }
         }

@@ -74,6 +74,21 @@ export interface FurnitureInstance {
   zY: number
 }
 
+export interface ActivitySpot {
+  /** Unique identifier, e.g. "myproject:bookshelf-spot-0" */
+  uid: string
+  /** Tool category: 'file_research' | 'web_research' | 'planning' */
+  toolCategory: string
+  /** Tile col where character stands */
+  standCol: number
+  /** Tile row where character stands */
+  standRow: number
+  /** Direction to face when at the spot (toward the prop) */
+  facingDir: Direction
+  /** Character id occupying this spot, or null */
+  occupiedBy: number | null
+}
+
 export interface ToolActivity {
   toolId: string
   status: string
@@ -201,4 +216,15 @@ export interface Character {
   projectName?: string
   /** Session ID for metadata persistence (stable across restarts) */
   sessionId?: string
+  /** Whether the character is standing at an activity spot (not seated) */
+  atActivitySpot: boolean
+  /** Current activity spot target, or null if heading to seat */
+  activityTarget: ActivitySpot | null
+}
+
+export interface ConversationEntry {
+  kind: 'assistant_text' | 'user_text' | 'tool_use' | 'tool_result' | 'turn_end'
+  content: string
+  toolId?: string
+  toolName?: string
 }

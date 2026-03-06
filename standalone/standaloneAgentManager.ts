@@ -1,18 +1,38 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { MessageSink } from '../src/types.js';
+import type { MessageSink, ConversationEntry } from '../src/types.js';
 import type { StandaloneAgentState } from './types.js';
 import { startFileWatching } from '../src/fileWatcher.js';
 import { cancelWaitingTimer, cancelPermissionTimer } from '../src/timerManager.js';
+import { CONVERSATION_BUFFER_SIZE } from '../src/constants.js';
 
 /**
  * A MessageSink that delegates to the current broadcast sink.
- * This ensures agents always use the latest sink even if they were
- * created before any WebSocket client connected.
+ * Intercepts agentConversation messages to buffer entries per agent.
  */
 class DelegatingSink implements MessageSink {
 	current: MessageSink | undefined;
+	private agentManager: StandaloneAgentManager | undefined;
+
+	setAgentManager(mgr: StandaloneAgentManager): void {
+		this.agentManager = mgr;
+	}
+
 	postMessage(msg: unknown): void {
+		// Intercept conversation messages to buffer them
+		const m = msg as Record<string, unknown>;
+		if (m.type === 'agentConversation' && this.agentManager) {
+			const agentId = m.id as number;
+			const entries = m.entries as ConversationEntry[];
+			const agent = this.agentManager.agents.get(agentId);
+			if (agent && entries) {
+				agent.conversationBuffer.push(...entries);
+				// Cap buffer size
+				if (agent.conversationBuffer.length > CONVERSATION_BUFFER_SIZE) {
+					agent.conversationBuffer.splice(0, agent.conversationBuffer.length - CONVERSATION_BUFFER_SIZE);
+				}
+			}
+		}
 		this.current?.postMessage(msg);
 	}
 }
@@ -32,6 +52,10 @@ export class StandaloneAgentManager {
 
 	// Delegating sink — always points to the latest broadcast target
 	private delegatingSink = new DelegatingSink();
+
+	constructor() {
+		this.delegatingSink.setAgentManager(this);
+	}
 
 	setSink(sink: MessageSink | undefined): void {
 		this.delegatingSink.current = sink;
@@ -64,6 +88,7 @@ export class StandaloneAgentManager {
 			hadToolsInTurn: false,
 			sessionId,
 			projectName,
+			conversationBuffer: [],
 		};
 
 		this.agents.set(id, agent);
@@ -148,6 +173,14 @@ export class StandaloneAgentManager {
 					type: 'agentStatus',
 					id: agentId,
 					status: 'waiting',
+				});
+			}
+			// Send buffered conversation history
+			if (agent.conversationBuffer.length > 0) {
+				ws.postMessage({
+					type: 'agentConversationHistory',
+					id: agentId,
+					entries: agent.conversationBuffer,
 				});
 			}
 		}

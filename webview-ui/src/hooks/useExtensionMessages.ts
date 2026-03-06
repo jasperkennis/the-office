@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
-import type { ToolActivity } from '../office/types.js'
+import type { ToolActivity, ConversationEntry } from '../office/types.js'
 import { extractToolName } from '../office/toolUtils.js'
 import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js'
 import { setFloorSprites } from '../office/floorTiles.js'
@@ -8,6 +8,7 @@ import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
+import { CONVERSATION_MAX_ENTRIES } from '../constants.js'
 
 export interface SubagentCharacter {
   id: number
@@ -54,6 +55,7 @@ export interface ExtensionMessageState {
   layoutReady: boolean
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
   workspaceFolders: WorkspaceFolder[]
+  agentConversation: Record<number, ConversationEntry[]>
 }
 
 export function useExtensionMessages(
@@ -68,6 +70,7 @@ export function useExtensionMessages(
   const [layoutReady, setLayoutReady] = useState(false)
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
   const [workspaceFolders, setWorkspaceFolders] = useState<WorkspaceFolder[]>([])
+  const [agentConversation, setAgentConversation] = useState<Record<number, ConversationEntry[]>>({})
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
@@ -140,6 +143,12 @@ export function useExtensionMessages(
           return next
         })
         setSubagentTools((prev) => {
+          if (!(id in prev)) return prev
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
+        setAgentConversation((prev) => {
           if (!(id in prev)) return prev
           const next = { ...prev }
           delete next[id]
@@ -363,6 +372,23 @@ export function useExtensionMessages(
         } catch (err) {
           console.error(`❌ Webview: Error processing furnitureAssetsLoaded:`, err)
         }
+      } else if (msg.type === 'agentConversation') {
+        const id = msg.id as number
+        const entries = msg.entries as ConversationEntry[]
+        setAgentConversation((prev) => {
+          const existing = prev[id] || []
+          const merged = [...existing, ...entries]
+          return { ...prev, [id]: merged.length > CONVERSATION_MAX_ENTRIES ? merged.slice(-CONVERSATION_MAX_ENTRIES) : merged }
+        })
+      } else if (msg.type === 'agentConversationHistory') {
+        const id = msg.id as number
+        const entries = msg.entries as ConversationEntry[]
+        setAgentConversation((prev) => {
+          const existing = prev[id] || []
+          // Only load history if we don't already have entries for this agent
+          if (existing.length > 0) return prev
+          return { ...prev, [id]: entries.slice(-CONVERSATION_MAX_ENTRIES) }
+        })
       }
     }
     window.addEventListener('message', handler)
@@ -370,5 +396,5 @@ export function useExtensionMessages(
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }
+  return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, agentConversation }
 }

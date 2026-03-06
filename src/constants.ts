@@ -27,6 +27,11 @@ export const CHAR_COUNT = 6;
 // ── User-Level Persistence ────────────────────────────────────
 export const LAYOUT_FILE_DIR = '.pixel-agents';
 
+// ── Conversation Panel ──────────────────────────────────────
+export const CONVERSATION_BUFFER_SIZE = 200;
+export const CONVERSATION_TEXT_MAX_LENGTH = 500;
+export const CONVERSATION_TOOL_RESULT_MAX_LENGTH = 300;
+
 // ── Settings Persistence ────────────────────────────────────
 export const GLOBAL_KEY_SOUND_ENABLED = 'pixel-agents.soundEnabled';
 

@@ -28,6 +28,13 @@ export interface AgentState extends BaseAgentState {
 	terminalRef: vscode.Terminal;
 }
 
+export interface ConversationEntry {
+	kind: 'assistant_text' | 'user_text' | 'tool_use' | 'tool_result' | 'turn_end';
+	content: string;
+	toolId?: string;
+	toolName?: string;
+}
+
 export interface PersistedAgent {
 	id: number;
 	terminalName: string;
