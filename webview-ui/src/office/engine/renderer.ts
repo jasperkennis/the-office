@@ -349,11 +349,6 @@ export function renderFrame(
   // Draw tiles (floor + wall base color)
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
 
-  // Project labels above rooms
-  if (rooms) {
-    renderProjectLabels(ctx, rooms, offsetX, offsetY, zoom)
-  }
-
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
     renderSeatIndicators(ctx, selection.seats, selection.characters, selection.selectedAgentId, selection.hoveredTile, offsetX, offsetY, zoom)
@@ -371,6 +366,11 @@ export function renderFrame(
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
   renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
+
+  // Project labels above rooms (after scene so walls don't cover them)
+  if (rooms) {
+    renderProjectLabels(ctx, rooms, offsetX, offsetY, zoom)
+  }
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom)

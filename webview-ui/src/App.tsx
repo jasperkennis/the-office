@@ -8,6 +8,7 @@ import { PULSE_ANIMATION_DURATION_SEC, ZOOM_DEFAULT_DPR_FACTOR } from './constan
 import { ZoomControls } from './components/ZoomControls.js'
 import { BottomToolbar } from './components/BottomToolbar.js'
 import { DebugView } from './components/DebugView.js'
+import { AgentSidebar } from './components/AgentSidebar.js'
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null }
@@ -110,6 +111,14 @@ function App() {
         zoom={zoom}
         panRef={panRef}
         onCloseAgent={handleCloseAgent}
+      />
+
+      <AgentSidebar
+        officeState={officeState}
+        agents={agents}
+        selectedAgent={selectedAgent}
+        agentTools={agentTools}
+        agentStatuses={agentStatuses}
       />
 
       {isDebugMode && (
