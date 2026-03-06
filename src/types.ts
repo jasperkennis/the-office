@@ -20,8 +20,8 @@ export interface BaseAgentState {
 	isWaiting: boolean;
 	permissionSent: boolean;
 	hadToolsInTurn: boolean;
-	/** Workspace folder name (only set for multi-root workspaces) */
-	folderName?: string;
+	/** Workspace folder name */
+	folderName: string;
 }
 
 export interface AgentState extends BaseAgentState {
@@ -33,6 +33,6 @@ export interface PersistedAgent {
 	terminalName: string;
 	jsonlFile: string;
 	projectDir: string;
-	/** Workspace folder name (only set for multi-root workspaces) */
-	folderName?: string;
+	/** Workspace folder name */
+	folderName: string;
 }

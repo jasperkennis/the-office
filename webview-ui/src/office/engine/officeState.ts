@@ -1,4 +1,6 @@
 import { TILE_SIZE, MATRIX_EFFECT_DURATION, CharacterState, Direction } from '../types.js'
+import type { RoomInfo } from '../layout/roomGenerator.js'
+import { generateRoomLayout } from '../layout/roomGenerator.js'
 import {
   PALETTE_COUNT,
   HUE_SHIFT_MIN_DEG,
@@ -12,6 +14,7 @@ import {
   CHARACTER_SITTING_OFFSET_PX,
   CHARACTER_HIT_HALF_WIDTH,
   CHARACTER_HIT_HEIGHT,
+  AGENT_NAME_POOL,
 } from '../../constants.js'
 import type { Character, Seat, FurnitureInstance, TileType as TileTypeVal, OfficeLayout, PlacedFurniture } from '../types.js'
 import { createCharacter, updateCharacter } from './characters.js'
@@ -43,6 +46,11 @@ export class OfficeState {
   /** Reverse lookup: sub-agent character ID → parent info */
   subagentMeta: Map<number, { parentAgentId: number; parentToolId: string }> = new Map()
   private nextSubagentId = -1
+
+  /** Room metadata from auto-generated layout */
+  rooms: RoomInfo[] = []
+  /** Maps project name → seat UIDs in that project's room */
+  projectSeats: Map<string, string[]> = new Map()
 
   constructor(layout?: OfficeLayout) {
     this.layout = layout || createDefaultLayout()
@@ -166,6 +174,99 @@ export class OfficeState {
     return null
   }
 
+  /** Find a free seat in the given project's room, or fall back to any free seat */
+  private findFreeSeatForProject(projectName: string): string | null {
+    const projectSeatUids = this.projectSeats.get(projectName)
+    if (projectSeatUids) {
+      for (const uid of projectSeatUids) {
+        const seat = this.seats.get(uid)
+        if (seat && !seat.assigned) return uid
+      }
+    }
+    return this.findFreeSeat()
+  }
+
+  /** Regenerate the room layout from known projects and current agents */
+  regenerateRoomLayout(
+    knownProjects: Array<{ name: string; workspacePath: string }>,
+  ): void {
+    // Count agents per project
+    const agentCounts = new Map<string, number>()
+    for (const ch of this.characters.values()) {
+      if (ch.isSubagent) continue
+      const name = ch.projectName || ch.folderName || ''
+      if (name) {
+        agentCounts.set(name, (agentCounts.get(name) || 0) + 1)
+      }
+    }
+
+    // Build project list: all known projects, plus any with active agents
+    const projectNames = new Set<string>()
+    for (const kp of knownProjects) {
+      projectNames.add(kp.name)
+    }
+    for (const name of agentCounts.keys()) {
+      projectNames.add(name)
+    }
+
+    // Sort alphabetically for stable ordering
+    const sortedProjects = Array.from(projectNames).sort().map((name) => ({
+      name,
+      agentCount: agentCounts.get(name) || 0,
+    }))
+
+    const { layout, rooms } = generateRoomLayout(sortedProjects)
+
+    // Store room metadata
+    this.rooms = rooms
+    this.projectSeats.clear()
+    for (const room of rooms) {
+      this.projectSeats.set(room.projectName, room.seatUids)
+    }
+
+    // Rebuild layout (this handles seat reassignment)
+    this.rebuildFromLayout(layout)
+
+    // Re-assign characters to seats in their project's room
+    // First, unassign all
+    for (const seat of this.seats.values()) {
+      seat.assigned = false
+    }
+
+    // Assign each character to a seat in their project's room
+    for (const ch of this.characters.values()) {
+      const projectName = ch.projectName || ch.folderName || ''
+      const seatId = this.findFreeSeatForProject(projectName)
+      if (seatId) {
+        const seat = this.seats.get(seatId)!
+        seat.assigned = true
+        ch.seatId = seatId
+        ch.tileCol = seat.seatCol
+        ch.tileRow = seat.seatRow
+        ch.x = seat.seatCol * TILE_SIZE + TILE_SIZE / 2
+        ch.y = seat.seatRow * TILE_SIZE + TILE_SIZE / 2
+        ch.dir = seat.facingDir
+        ch.path = []
+        ch.moveProgress = 0
+      }
+    }
+  }
+
+  /** Pick a name not currently in use by any character */
+  private pickName(): string {
+    const usedNames = new Set<string>()
+    for (const ch of this.characters.values()) {
+      usedNames.add(ch.name)
+    }
+    // Try to find an unused name from the pool
+    const available = AGENT_NAME_POOL.filter(n => !usedNames.has(n))
+    if (available.length > 0) {
+      return available[Math.floor(Math.random() * available.length)]
+    }
+    // All names used — pick a random one (will duplicate)
+    return AGENT_NAME_POOL[Math.floor(Math.random() * AGENT_NAME_POOL.length)]
+  }
+
   /**
    * Pick a diverse palette for a new agent based on currently active agents.
    * First 6 agents each get a unique skin (random order). Beyond 6, skins
@@ -207,7 +308,7 @@ export class OfficeState {
       hueShift = pick.hueShift
     }
 
-    // Try preferred seat first, then any free seat
+    // Try preferred seat first, then project room seat, then any free seat
     let seatId: string | null = null
     if (preferredSeatId && this.seats.has(preferredSeatId)) {
       const seat = this.seats.get(preferredSeatId)!
@@ -215,21 +316,26 @@ export class OfficeState {
         seatId = preferredSeatId
       }
     }
+    if (!seatId && folderName) {
+      seatId = this.findFreeSeatForProject(folderName)
+    }
     if (!seatId) {
       seatId = this.findFreeSeat()
     }
+
+    const name = this.pickName()
 
     let ch: Character
     if (seatId) {
       const seat = this.seats.get(seatId)!
       seat.assigned = true
-      ch = createCharacter(id, palette, seatId, seat, hueShift)
+      ch = createCharacter(id, palette, seatId, seat, hueShift, name)
     } else {
       // No seats — spawn at random walkable tile
       const spawn = this.walkableTiles.length > 0
         ? this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
         : { col: 1, row: 1 }
-      ch = createCharacter(id, palette, null, null, hueShift)
+      ch = createCharacter(id, palette, null, null, hueShift, name)
       ch.x = spawn.col * TILE_SIZE + TILE_SIZE / 2
       ch.y = spawn.row * TILE_SIZE + TILE_SIZE / 2
       ch.tileCol = spawn.col
@@ -238,6 +344,7 @@ export class OfficeState {
 
     if (folderName) {
       ch.folderName = folderName
+      ch.projectName = folderName
     }
     if (!skipSpawnEffect) {
       ch.matrixEffect = 'spawn'
@@ -385,11 +492,13 @@ export class OfficeState {
       }
     }
 
+    const subName = this.pickName()
+
     let ch: Character
     if (bestSeatId) {
       const seat = this.seats.get(bestSeatId)!
       seat.assigned = true
-      ch = createCharacter(id, palette, bestSeatId, seat, hueShift)
+      ch = createCharacter(id, palette, bestSeatId, seat, hueShift, subName)
     } else {
       // No seats — spawn at closest walkable tile to parent
       let spawn = { col: 1, row: 1 }
@@ -405,7 +514,7 @@ export class OfficeState {
         }
         spawn = closest
       }
-      ch = createCharacter(id, palette, null, null, hueShift)
+      ch = createCharacter(id, palette, null, null, hueShift, subName)
       ch.x = spawn.col * TILE_SIZE + TILE_SIZE / 2
       ch.y = spawn.row * TILE_SIZE + TILE_SIZE / 2
       ch.tileCol = spawn.col

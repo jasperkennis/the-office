@@ -10,9 +10,8 @@ import {
 	loadFloorTiles,
 	loadWallTiles,
 	loadCharacterSprites,
-	loadDefaultLayout,
 } from '../src/assetLoader.js';
-import { readLayoutFromFile, writeLayoutToFile, watchLayoutFile } from '../src/layoutPersistence.js';
+import { loadKnownProjects, addKnownProject } from '../src/projectStore.js';
 import { SERVER_PORT } from './constants.js';
 import { ProjectScanner } from './projectScanner.js';
 import { StandaloneAgentManager } from './standaloneAgentManager.js';
@@ -54,14 +53,13 @@ interface PreloadedAssets {
 	floorTiles: unknown | null;
 	wallTiles: unknown | null;
 	furnitureAssets: { catalog: unknown; sprites: Map<string, string[][]> } | null;
-	defaultLayout: Record<string, unknown> | null;
 }
 
 async function preloadAssets(): Promise<PreloadedAssets> {
 	const assetsRoot = fs.existsSync(path.join(ASSETS_DIR)) ? path.dirname(ASSETS_DIR) : null;
 	if (!assetsRoot) {
 		console.log('[Standalone] No assets directory found at', ASSETS_DIR);
-		return { characterSprites: null, floorTiles: null, wallTiles: null, furnitureAssets: null, defaultLayout: null };
+		return { characterSprites: null, floorTiles: null, wallTiles: null, furnitureAssets: null };
 	}
 
 	console.log('[Standalone] Loading assets from', assetsRoot);
@@ -69,9 +67,8 @@ async function preloadAssets(): Promise<PreloadedAssets> {
 	const floorTiles = await loadFloorTiles(assetsRoot);
 	const wallTiles = await loadWallTiles(assetsRoot);
 	const furnitureAssets = await loadFurnitureAssets(assetsRoot);
-	const defaultLayout = loadDefaultLayout(assetsRoot);
 
-	return { characterSprites, floorTiles, wallTiles, furnitureAssets, defaultLayout };
+	return { characterSprites, floorTiles, wallTiles, furnitureAssets };
 }
 
 // ── Main ─────────────────────────────────────────────────────
@@ -100,7 +97,9 @@ async function main(): Promise<void> {
 	const scanner = new ProjectScanner({
 		onNewSession(projectDir, jsonlFile, projectName) {
 			if (!agentManager.hasSession(jsonlFile)) {
+				addKnownProject(projectName, projectDir);
 				agentManager.addSession(projectDir, jsonlFile, projectName);
+				broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
 			}
 		},
 		onSessionStale(jsonlFile) {
@@ -108,11 +107,6 @@ async function main(): Promise<void> {
 		},
 	});
 	scanner.start();
-
-	// ── Layout watcher ───────────────────────────────────────
-	const layoutWatcher = watchLayoutFile((layout) => {
-		broadcastSink.postMessage({ type: 'layoutLoaded', layout });
-	});
 
 	// ── HTTP server ──────────────────────────────────────────
 	const MIME_TYPES: Record<string, string> = {
@@ -184,7 +178,7 @@ async function main(): Promise<void> {
 		ws.on('message', (raw) => {
 			try {
 				const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
-				handleClientMessage(ws, msg, agentManager, assets, layoutWatcher);
+				handleClientMessage(ws, msg, agentManager, assets, broadcastSink);
 			} catch {
 				// Ignore malformed messages
 			}
@@ -207,7 +201,6 @@ async function main(): Promise<void> {
 		console.log('\n[Standalone] Shutting down...');
 		scanner.stop();
 		agentManager.dispose();
-		layoutWatcher.dispose();
 		wss.close();
 		server.close();
 		process.exit(0);
@@ -219,7 +212,7 @@ function handleClientMessage(
 	msg: Record<string, unknown>,
 	agentManager: StandaloneAgentManager,
 	assets: PreloadedAssets,
-	layoutWatcher: { markOwnWrite(): void },
+	broadcastSink: MessageSink,
 ): void {
 	if (msg.type === 'webviewReady') {
 		// Send all pre-loaded assets in order
@@ -248,21 +241,27 @@ function handleClientMessage(
 			}));
 		}
 
+		// Send known projects
+		const knownProjects = loadKnownProjects();
+		ws.send(JSON.stringify({ type: 'knownProjects', projects: knownProjects }));
+
 		// Send existing agents BEFORE layout (webview buffers them until layoutLoaded)
 		const agentIds = agentManager.getExistingAgentIds();
 		const agentMeta = readJson(SEATS_FILE) ?? {};
+		const folderNames: Record<number, string> = {};
+		for (const id of agentIds) {
+			const agent = agentManager.agents.get(id);
+			if (agent) folderNames[id] = agent.projectName;
+		}
 		ws.send(JSON.stringify({
 			type: 'existingAgents',
 			agents: agentIds,
 			agentMeta,
-			folderNames: {},
+			folderNames,
 		}));
 
-		// Send layout (triggers webview to process buffered agents)
-		const layout = readLayoutFromFile() ?? assets.defaultLayout;
-		if (layout) {
-			ws.send(JSON.stringify({ type: 'layoutLoaded', layout }));
-		}
+		// Signal layout ready (rooms generated from known projects on webview side)
+		ws.send(JSON.stringify({ type: 'layoutLoaded', layout: null }));
 
 		// Send settings
 		const settings = readJson(SETTINGS_FILE);
@@ -281,19 +280,12 @@ function handleClientMessage(
 				console.log(`[Standalone] Could not focus iTerm session for agent ${agentId}`);
 			}
 		}
-	} else if (msg.type === 'saveLayout') {
-		layoutWatcher.markOwnWrite();
-		writeLayoutToFile(msg.layout as Record<string, unknown>);
 	} else if (msg.type === 'saveAgentSeats') {
 		writeJson(SEATS_FILE, msg.seats);
 	} else if (msg.type === 'setSoundEnabled') {
 		writeJson(SETTINGS_FILE, { soundEnabled: msg.enabled });
 	} else if (msg.type === 'openClaude' || msg.type === 'closeAgent' || msg.type === 'openSessionsFolder') {
 		// Not supported in standalone mode — ignore
-	} else if (msg.type === 'exportLayout') {
-		// Not supported in standalone mode (no file save dialog) — ignore
-	} else if (msg.type === 'importLayout') {
-		// Not supported in standalone mode (no file open dialog) — ignore
 	}
 }
 

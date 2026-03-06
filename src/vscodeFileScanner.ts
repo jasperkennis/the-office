@@ -111,11 +111,13 @@ function adoptTerminalForFile(
 	persistAgents: () => void,
 ): void {
 	const id = nextAgentIdRef.current++;
+	const folderName = projectDir ? path.basename(projectDir) : (vscode.workspace.workspaceFolders?.[0]?.name ?? 'Project');
 	const agent: AgentState = {
 		id,
 		terminalRef: terminal,
 		projectDir,
 		jsonlFile,
+		folderName,
 		fileOffset: 0,
 		lineBuffer: '',
 		activeToolIds: new Set(),
@@ -133,7 +135,7 @@ function adoptTerminalForFile(
 	persistAgents();
 
 	console.log(`[Pixel Agents] Agent ${id}: adopted terminal "${terminal.name}" for ${path.basename(jsonlFile)}`);
-	webview?.postMessage({ type: 'agentCreated', id });
+	webview?.postMessage({ type: 'agentCreated', id, folderName });
 
 	startFileWatching(id, jsonlFile, agents, fileWatchers, pollingTimers, waitingTimers, permissionTimers, webview);
 	readNewLines(id, agents, waitingTimers, permissionTimers, webview);

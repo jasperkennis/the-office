@@ -144,6 +144,8 @@ export interface OfficeLayout {
 
 export interface Character {
   id: number
+  /** Display name shown above the character */
+  name: string
   state: CharacterState
   dir: Direction
   /** Pixel position */
@@ -193,6 +195,8 @@ export interface Character {
   matrixEffectTimer: number
   /** Per-column random seeds (16 values) for staggered rain timing */
   matrixEffectSeeds: number[]
-  /** Workspace folder name (only set for multi-root workspaces) */
+  /** Workspace folder name */
   folderName?: string
+  /** Project name for room assignment */
+  projectName?: string
 }

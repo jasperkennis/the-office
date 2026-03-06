@@ -110,34 +110,6 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
         )}
         <button
           onClick={() => {
-            vscode.postMessage({ type: 'exportLayout' })
-            onClose()
-          }}
-          onMouseEnter={() => setHovered('export')}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            ...menuItemBase,
-            background: hovered === 'export' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-          }}
-        >
-          Export Layout
-        </button>
-        <button
-          onClick={() => {
-            vscode.postMessage({ type: 'importLayout' })
-            onClose()
-          }}
-          onMouseEnter={() => setHovered('import')}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            ...menuItemBase,
-            background: hovered === 'import' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-          }}
-        >
-          Import Layout
-        </button>
-        <button
-          onClick={() => {
             const newVal = !isSoundEnabled()
             setSoundEnabled(newVal)
             setSoundLocal(newVal)

@@ -7,7 +7,6 @@ import { cancelWaitingTimer, cancelPermissionTimer } from './timerManager.js';
 import { startFileWatching, readNewLines } from './fileWatcher.js';
 import { ensureProjectScan } from './vscodeFileScanner.js';
 import { JSONL_POLL_INTERVAL_MS, TERMINAL_NAME_PREFIX, WORKSPACE_KEY_AGENTS, WORKSPACE_KEY_AGENT_SEATS } from './constants.js';
-import { migrateAndLoadLayout } from './layoutPersistence.js';
 
 export function getProjectDirPath(cwd?: string): string | null {
 	const workspacePath = cwd || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -36,7 +35,6 @@ export async function launchNewTerminal(
 ): Promise<void> {
 	const folders = vscode.workspace.workspaceFolders;
 	const cwd = folderPath || folders?.[0]?.uri.fsPath;
-	const isMultiRoot = !!(folders && folders.length > 1);
 	const idx = nextTerminalIndexRef.current++;
 	const terminal = vscode.window.createTerminal({
 		name: `${TERMINAL_NAME_PREFIX} #${idx}`,
@@ -59,7 +57,7 @@ export async function launchNewTerminal(
 
 	// Create agent immediately (before JSONL file exists)
 	const id = nextAgentIdRef.current++;
-	const folderName = isMultiRoot && cwd ? path.basename(cwd) : undefined;
+	const folderName = cwd ? path.basename(cwd) : (folders?.[0]?.name ?? 'Project');
 	const agent: AgentState = {
 		id,
 		terminalRef: terminal,
@@ -200,7 +198,7 @@ export function restoreAgents(
 			isWaiting: false,
 			permissionSent: false,
 			hadToolsInTurn: false,
-			folderName: p.folderName,
+			folderName: p.folderName || vscode.workspace.workspaceFolders?.[0]?.name || 'Project',
 		};
 
 		agents.set(p.id, agent);
@@ -281,9 +279,7 @@ export function sendExistingAgents(
 	// Include folderName per agent
 	const folderNames: Record<number, string> = {};
 	for (const [id, agent] of agents) {
-		if (agent.folderName) {
-			folderNames[id] = agent.folderName;
-		}
+		folderNames[id] = agent.folderName;
 	}
 	console.log(`[Pixel Agents] sendExistingAgents: agents=${JSON.stringify(agentIds)}, meta=${JSON.stringify(agentMeta)}`);
 
@@ -323,15 +319,3 @@ export function sendCurrentAgentStatuses(
 	}
 }
 
-export function sendLayout(
-	context: vscode.ExtensionContext,
-	webview: MessageSink | undefined,
-	defaultLayout?: Record<string, unknown> | null,
-): void {
-	if (!webview) return;
-	const layout = migrateAndLoadLayout(context, defaultLayout);
-	webview.postMessage({
-		type: 'layoutLoaded',
-		layout,
-	});
-}

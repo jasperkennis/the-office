@@ -4,9 +4,7 @@ import type { WorkspaceFolder } from '../hooks/useExtensionMessages.js'
 import { vscode, isStandalone } from '../vscodeApi.js'
 
 interface BottomToolbarProps {
-  isEditMode: boolean
   onOpenClaude: () => void
-  onToggleEditMode: () => void
   isDebugMode: boolean
   onToggleDebugMode: () => void
   workspaceFolders: WorkspaceFolder[]
@@ -45,9 +43,7 @@ const btnActive: React.CSSProperties = {
 
 
 export function BottomToolbar({
-  isEditMode,
   onOpenClaude,
-  onToggleEditMode,
   isDebugMode,
   onToggleDebugMode,
   workspaceFolders,
@@ -158,22 +154,6 @@ export function BottomToolbar({
         )}
       </div>
       )}
-      <button
-        onClick={onToggleEditMode}
-        onMouseEnter={() => setHovered('edit')}
-        onMouseLeave={() => setHovered(null)}
-        style={
-          isEditMode
-            ? { ...btnActive }
-            : {
-                ...btnBase,
-                background: hovered === 'edit' ? 'var(--pixel-btn-hover-bg)' : btnBase.background,
-              }
-        }
-        title="Edit office layout"
-      >
-        Layout
-      </button>
       <div style={{ position: 'relative' }}>
         <button
           onClick={() => setIsSettingsOpen((v) => !v)}

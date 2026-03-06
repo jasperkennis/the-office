@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
-import type { OfficeLayout, ToolActivity } from '../office/types.js'
+import type { ToolActivity } from '../office/types.js'
 import { extractToolName } from '../office/toolUtils.js'
-import { migrateLayoutColors } from '../office/layout/layoutSerializer.js'
 import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js'
 import { setFloorSprites } from '../office/floorTiles.js'
 import { setWallSprites } from '../office/wallTiles.js'
@@ -40,6 +39,11 @@ export interface WorkspaceFolder {
   path: string
 }
 
+export interface KnownProject {
+  name: string
+  workspacePath: string
+}
+
 export interface ExtensionMessageState {
   agents: number[]
   selectedAgent: number | null
@@ -52,19 +56,8 @@ export interface ExtensionMessageState {
   workspaceFolders: WorkspaceFolder[]
 }
 
-function saveAgentSeats(os: OfficeState): void {
-  const seats: Record<number, { palette: number; hueShift: number; seatId: string | null }> = {}
-  for (const ch of os.characters.values()) {
-    if (ch.isSubagent) continue
-    seats[ch.id] = { palette: ch.palette, hueShift: ch.hueShift, seatId: ch.seatId }
-  }
-  vscode.postMessage({ type: 'saveAgentSeats', seats })
-}
-
 export function useExtensionMessages(
   getOfficeState: () => OfficeState,
-  onLayoutLoaded?: (layout: OfficeLayout) => void,
-  isEditDirty?: () => boolean,
 ): ExtensionMessageState {
   const [agents, setAgents] = useState<number[]>([])
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null)
@@ -79,6 +72,9 @@ export function useExtensionMessages(
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
 
+  // Known projects ref (not React state — doesn't drive rendering)
+  const knownProjectsRef = useRef<KnownProject[]>([])
+
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; folderName?: string }> = []
@@ -87,38 +83,25 @@ export function useExtensionMessages(
       const msg = e.data
       const os = getOfficeState()
 
-      if (msg.type === 'layoutLoaded') {
-        // Skip external layout updates while editor has unsaved changes
-        if (layoutReadyRef.current && isEditDirty?.()) {
-          console.log('[Webview] Skipping external layout update — editor has unsaved changes')
-          return
-        }
-        const rawLayout = msg.layout as OfficeLayout | null
-        const layout = rawLayout && rawLayout.version === 1 ? migrateLayoutColors(rawLayout) : null
-        if (layout) {
-          os.rebuildFromLayout(layout)
-          onLayoutLoaded?.(layout)
-        } else {
-          // Default layout — snapshot whatever OfficeState built
-          onLayoutLoaded?.(os.getLayout())
-        }
-        // Add buffered agents now that layout (and seats) are correct
+      if (msg.type === 'knownProjects') {
+        knownProjectsRef.current = msg.projects as KnownProject[]
+      } else if (msg.type === 'layoutLoaded') {
+        // Generate room layout from known projects and buffered agents
+        // First add buffered agents so their project names are counted
         for (const p of pendingAgents) {
           os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName)
         }
         pendingAgents = []
+        os.regenerateRoomLayout(knownProjectsRef.current)
         layoutReadyRef.current = true
         setLayoutReady(true)
-        if (os.characters.size > 0) {
-          saveAgentSeats(os)
-        }
       } else if (msg.type === 'agentCreated') {
         const id = msg.id as number
         const folderName = msg.folderName as string | undefined
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
         setSelectedAgent(id)
         os.addAgent(id, undefined, undefined, undefined, undefined, folderName)
-        saveAgentSeats(os)
+        os.regenerateRoomLayout(knownProjectsRef.current)
       } else if (msg.type === 'agentClosed') {
         const id = msg.id as number
         setAgents((prev) => prev.filter((a) => a !== id))
@@ -145,6 +128,7 @@ export function useExtensionMessages(
         os.removeAllSubagents(id)
         setSubagentCharacters((prev) => prev.filter((s) => s.parentAgentId !== id))
         os.removeAgent(id)
+        os.regenerateRoomLayout(knownProjectsRef.current)
       } else if (msg.type === 'existingAgents') {
         const incoming = msg.agents as number[]
         const meta = (msg.agentMeta || {}) as Record<number, { palette?: number; hueShift?: number; seatId?: string }>

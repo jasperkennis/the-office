@@ -51,6 +51,7 @@ export class StandaloneAgentManager {
 			id,
 			projectDir,
 			jsonlFile,
+			folderName: projectName,
 			fileOffset: 0,
 			lineBuffer: '',
 			activeToolIds: new Set(),
@@ -69,7 +70,7 @@ export class StandaloneAgentManager {
 		this.fileToAgent.set(jsonlFile, id);
 
 		console.log(`[Standalone] Agent ${id}: tracking ${projectName}/${sessionId}`);
-		this.delegatingSink.postMessage({ type: 'agentCreated', id });
+		this.delegatingSink.postMessage({ type: 'agentCreated', id, folderName: projectName });
 
 		// Start watching from end of file (don't replay history)
 		try {

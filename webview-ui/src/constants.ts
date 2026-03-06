@@ -88,6 +88,45 @@ export const DEFAULT_FLOOR_COLOR: FloorColor = { h: 35, s: 30, b: 15, c: 0 }
 export const DEFAULT_WALL_COLOR: FloorColor = { h: 240, s: 25, b: 0, c: 0 }
 export const DEFAULT_NEUTRAL_COLOR: FloorColor = { h: 0, s: 0, b: 0, c: 0 }
 
+// ── Room Generation ─────────────────────────────────────────
+export const ROOM_HEIGHT = 7
+export const ROOM_LABEL_ROWS = 1
+export const ROOM_GAP_COLS = 2
+export const ROOM_MIN_SEATS = 4
+export const ROOM_EXTRA_SEATS = 2
+export const ROOM_MIN_INTERIOR_WIDTH = 6
+export const ROOM_FLOOR_COLOR: FloorColor = { h: 35, s: 30, b: 15, c: 0 }
+export const ROOM_LABEL_FONT_SIZE_PX = 7
+export const ROOM_LABEL_COLOR = 'rgba(255, 255, 255, 0.65)'
+
+// ── Character Names ─────────────────────────────────────────
+export const NAME_VERTICAL_OFFSET_PX = 27
+export const NAME_FONT_SIZE_PX = 5
+export const NAME_COLOR = 'rgba(255, 255, 255, 0.85)'
+export const NAME_SHADOW_COLOR = 'rgba(0, 0, 0, 0.7)'
+export const AGENT_NAME_POOL = [
+  'Ada', 'Bash', 'Chip', 'Dot', 'Echo',
+  'Flux', 'Grit', 'Hex', 'Iris', 'Jazz',
+  'Kit', 'Lux', 'Max', 'Neo', 'Onyx',
+  'Pix', 'Quil', 'Rex', 'Sol', 'Tux',
+  'Uri', 'Vim', 'Wren', 'Xan', 'Yew',
+  'Zap', 'Ace', 'Byte', 'Cog', 'Dex',
+  'Elm', 'Fern', 'Glow', 'Haze', 'Ion',
+  'Jade', 'Knox', 'Lynx', 'Mox', 'Nix',
+  'Opal', 'Pip', 'Qube', 'Rust', 'Sage',
+  'Twig', 'Uma', 'Vex', 'Wisp', 'Xero',
+  'Yuki', 'Zinc', 'Arc', 'Blip', 'Cruz',
+  'Dawn', 'Etch', 'Finn', 'Glim', 'Halo',
+  'Ink', 'Jolt', 'Kite', 'Leaf', 'Moth',
+  'Null', 'Oak', 'Ping', 'Quix', 'Reed',
+  'Silk', 'Tarn', 'Unix', 'Vale', 'Wiki',
+  'Xyla', 'Yarn', 'Zest', 'Algo', 'Brio',
+  'Cleo', 'Dash', 'Enid', 'Fog', 'Grim',
+  'Hugo', 'Ivy', 'June', 'Koda', 'Lark',
+  'Miso', 'Noir', 'Otto', 'Plum', 'Rain',
+  'Silo', 'Theo', 'Ursa', 'Volt', 'Wynn',
+] as const
+
 // ── Notification Sound ──────────────────────────────────────
 export const NOTIFICATION_NOTE_1_HZ = 659.25   // E5
 export const NOTIFICATION_NOTE_2_HZ = 1318.51  // E6 (octave up)
