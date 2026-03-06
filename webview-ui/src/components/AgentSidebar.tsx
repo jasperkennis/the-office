@@ -53,6 +53,9 @@ function getDotInfo(
   if (isActive && hasActiveTools) {
     return { color: 'var(--pixel-status-active)', pulse: true }
   }
+  if (isActive) {
+    return { color: 'var(--pixel-status-active)', pulse: true }
+  }
   return null
 }
 
@@ -230,7 +233,7 @@ export function AgentSidebar({
                             marginTop: 1,
                           }}
                         >
-                          {isWaiting ? 'Waiting for input' : activity || 'Idle'}
+                          {isWaiting ? 'Waiting for input' : activity || (ch.isActive ? 'Thinking...' : 'Idle')}
                         </div>
                       )}
                     </div>
