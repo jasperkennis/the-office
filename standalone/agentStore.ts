@@ -59,6 +59,29 @@ export function generateAgentId(): string {
 	return crypto.randomUUID();
 }
 
+const OFFICE_NAMES = [
+	'Michael', 'Dwight', 'Jim', 'Pam', 'Ryan', 'Andy', 'Stanley',
+	'Kevin', 'Meredith', 'Angela', 'Oscar', 'Phyllis', 'Kelly',
+	'Toby', 'Creed', 'Darryl', 'Jan', 'Holly', 'Erin', 'Gabe',
+	'Clark', 'Pete', 'Nellie', 'Robert', 'Karen', 'Roy', 'Todd',
+	'Devon', 'Madge', 'Lonny', 'Hank', 'Nate', 'Val', 'Cathy',
+	'Jordan', 'Hannah', 'Troy', 'Nick', 'Sadiq', 'Hidetoshi',
+];
+
+/** Pick a random name not already used by existing persistent agents */
+export function pickRandomName(existingAgents: PersistentAgent[]): string {
+	const usedNames = new Set(existingAgents.map(a => a.name));
+	const available = OFFICE_NAMES.filter(n => !usedNames.has(n));
+	if (available.length > 0) {
+		return available[Math.floor(Math.random() * available.length)];
+	}
+	// All names taken — pick a random one with a suffix
+	const base = OFFICE_NAMES[Math.floor(Math.random() * OFFICE_NAMES.length)];
+	let suffix = 2;
+	while (usedNames.has(`${base} ${suffix}`)) suffix++;
+	return `${base} ${suffix}`;
+}
+
 export function buildSystemPrompt(agent: PersistentAgent): string {
 	const memoryPath = getAgentMemoryPath(agent.id);
 	const lines = [

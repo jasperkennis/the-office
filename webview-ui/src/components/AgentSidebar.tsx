@@ -68,6 +68,9 @@ function getDotInfo(
 interface RoomGroup {
   liveAgents: number[]
   offlineAgents: OfflineAgent[]
+  workspacePath?: string
+  /** Special rooms (conference, warehouse) can't hire workers */
+  isSpecialRoom?: boolean
 }
 
 /** Group live + offline agents by their room/project name */
@@ -82,24 +85,30 @@ function groupByRoom(
     if (!groups.has(name)) groups.set(name, { liveAgents: [], offlineAgents: [] })
     return groups.get(name)!
   }
-  // Seed with rooms from officeState + known projects
+  // Seed with rooms from officeState + known projects (with workspace paths)
   for (const room of officeState.rooms) {
-    ensure(room.projectName)
+    const g = ensure(room.projectName)
+    if (room.isConferenceRoom) g.isSpecialRoom = true
   }
   for (const kp of knownProjects) {
-    ensure(kp.name)
+    const g = ensure(kp.name)
+    if (kp.workspacePath) g.workspacePath = kp.workspacePath
   }
   // Add live agents
   for (const id of agents) {
     const ch = officeState.characters.get(id)
     if (!ch || ch.isSubagent) continue
     const project = ch.projectName || ch.folderName || ''
-    ensure(project).liveAgents.push(id)
+    const g = ensure(project)
+    g.liveAgents.push(id)
+    if (ch.workspacePath && !g.workspacePath) g.workspacePath = ch.workspacePath
   }
   // Add offline agents
   for (const agent of offlineAgents) {
     const project = agent.projectName || 'Unknown'
-    ensure(project).offlineAgents.push(agent)
+    const g = ensure(project)
+    g.offlineAgents.push(agent)
+    if (agent.workspacePath && !g.workspacePath) g.workspacePath = agent.workspacePath
   }
   return groups
 }
@@ -169,7 +178,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
               cursor: 'pointer',
             }}
           >
-            Delete
+            Fire
           </button>
         </div>
       </div>
@@ -194,19 +203,21 @@ interface EmployeeFileProps {
   agentId: number | null
   /** Offline persistent agent to edit, or undefined */
   offlineAgent?: OfflineAgent
+  /** Pre-filled workspace path for new workers in a specific room */
+  defaultWorkspacePath?: string
   onClose: () => void
   onSave: () => void
   /** If true, immediately launch the agent after saving */
   launchAfterSave?: boolean
 }
 
-function EmployeeFile({ officeState, agentId, offlineAgent, onClose, onSave, launchAfterSave }: EmployeeFileProps) {
+function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath, onClose, onSave, launchAfterSave }: EmployeeFileProps) {
   const ch = agentId !== null ? officeState.characters.get(agentId) : null
 
   const [name, setName] = useState(ch?.name || offlineAgent?.name || '')
   const [roleShort, setRoleShort] = useState(ch?.roleShort || offlineAgent?.roleShort || '')
   const [roleFull, setRoleFull] = useState(ch?.roleFull || offlineAgent?.roleFull || '')
-  const [workspacePath, setWorkspacePath] = useState(ch?.workspacePath || offlineAgent?.workspacePath || '')
+  const [workspacePath, setWorkspacePath] = useState(ch?.workspacePath || offlineAgent?.workspacePath || defaultWorkspacePath || '')
 
   const persistentId = ch?.persistentAgentId || (offlineAgent?.isPersistent ? offlineAgent.sessionId : undefined)
 
@@ -368,7 +379,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, onClose, onSave, lau
             alignSelf: 'flex-end',
           }}
         >
-          {launchAfterSave ? 'Save & Launch' : 'Save'}
+          {launchAfterSave ? 'Save & Hire' : 'Save'}
         </button>
       </div>
     </div>
@@ -392,7 +403,7 @@ export function AgentSidebar({
   const [hoveredOffline, setHoveredOffline] = useState<string | null>(null)
   const [editingAgentId, setEditingAgentId] = useState<number | null>(null)
   const [editingOfflineAgent, setEditingOfflineAgent] = useState<OfflineAgent | undefined>(undefined)
-  const [creatingNew, setCreatingNew] = useState(false)
+  const [creatingForWorkspace, setCreatingForWorkspace] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
 
   const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
@@ -407,13 +418,13 @@ export function AgentSidebar({
     vscode.postMessage({ type: 'focusAgent', id })
   }
 
-  const showEmployeeFile = editingAgentId !== null || editingOfflineAgent !== undefined || creatingNew
+  const showEmployeeFile = editingAgentId !== null || editingOfflineAgent !== undefined || creatingForWorkspace !== null
 
   return (
     <>
       {confirmDelete && (
         <ConfirmDialog
-          message={`Remove "${confirmDelete.name}" from memory? This cannot be undone.`}
+          message={`Fire "${confirmDelete.name}"? This cannot be undone.`}
           onConfirm={() => {
             if (confirmDelete.isPersistent) {
               vscode.postMessage({ type: 'deleteAgentIdentity', agentId: confirmDelete.sessionId })
@@ -430,9 +441,10 @@ export function AgentSidebar({
           officeState={officeState}
           agentId={editingAgentId}
           offlineAgent={editingOfflineAgent}
-          onClose={() => { setEditingAgentId(null); setEditingOfflineAgent(undefined); setCreatingNew(false) }}
+          defaultWorkspacePath={creatingForWorkspace ?? undefined}
+          onClose={() => { setEditingAgentId(null); setEditingOfflineAgent(undefined); setCreatingForWorkspace(null) }}
           onSave={onSaveAgentMeta}
-          launchAfterSave={creatingNew}
+          launchAfterSave={creatingForWorkspace !== null}
         />
       )}
       <div
@@ -467,7 +479,7 @@ export function AgentSidebar({
           onClick={() => setCollapsed((p) => !p)}
         >
           <span style={{ fontSize: '20px', color: 'var(--pixel-text)', userSelect: 'none' }}>
-            Agents ({agents.length})
+            Employees ({agents.length})
           </span>
           <span style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', userSelect: 'none', marginLeft: 6 }}>
             {collapsed ? '\u25B6' : '\u25BC'}
@@ -572,7 +584,7 @@ export function AgentSidebar({
                             e.stopPropagation()
                             setEditingAgentId(id)
                             setEditingOfflineAgent(undefined)
-                            setCreatingNew(false)
+                            setCreatingForWorkspace(null)
                           }}
                           title="Employee file"
                           style={{
@@ -588,7 +600,7 @@ export function AgentSidebar({
                               e.stopPropagation()
                               setConfirmDelete({ sessionId: ch.persistentAgentId || ch.sessionId!, name: ch.name || `Agent #${id}`, isPersistent: !!ch.persistentAgentId })
                             }}
-                            title="Remove from memory"
+                            title="Fire employee"
                             style={{
                               ...deleteButtonStyle,
                               color: isHovered || isSelected ? 'var(--pixel-text-dim)' : 'transparent',
@@ -670,7 +682,7 @@ export function AgentSidebar({
                             e.stopPropagation()
                             setEditingAgentId(null)
                             setEditingOfflineAgent(agent)
-                            setCreatingNew(false)
+                            setCreatingForWorkspace(null)
                           }}
                           title="Employee file"
                           style={{
@@ -685,7 +697,7 @@ export function AgentSidebar({
                             e.stopPropagation()
                             setConfirmDelete({ sessionId: agent.sessionId, name: agent.name || agent.sessionId.slice(0, 8), isPersistent: agent.isPersistent })
                           }}
-                          title="Remove from memory"
+                          title="Fire employee"
                           style={{
                             ...deleteButtonStyle,
                             color: isHovered ? 'var(--pixel-text-dim)' : 'transparent',
@@ -724,31 +736,29 @@ export function AgentSidebar({
                     </div>
                   )
                 })}
+
+                {/* + hire link per project room (not special rooms) */}
+                {!group.isSpecialRoom && (
+                  <div
+                    onClick={() => {
+                      setEditingAgentId(null)
+                      setEditingOfflineAgent(undefined)
+                      setCreatingForWorkspace(group.workspacePath || '')
+                    }}
+                    style={{
+                      padding: '3px 6px 3px 16px',
+                      fontSize: '16px',
+                      color: 'var(--pixel-accent)',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--pixel-border)',
+                      userSelect: 'none',
+                    }}
+                  >
+                    + hire
+                  </div>
+                )}
               </div>
             ))}
-
-            {/* New Worker button */}
-            <div style={{ padding: '6px' }}>
-              <button
-                onClick={() => {
-                  setEditingAgentId(null)
-                  setEditingOfflineAgent(undefined)
-                  setCreatingNew(true)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '18px',
-                  color: 'var(--pixel-agent-text)',
-                  background: 'var(--pixel-agent-bg)',
-                  border: '2px solid var(--pixel-agent-border)',
-                  borderRadius: 0,
-                  cursor: 'pointer',
-                }}
-              >
-                + New Worker
-              </button>
-            </div>
           </div>
         )}
       </div>

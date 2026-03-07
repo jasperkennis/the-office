@@ -55,22 +55,41 @@ export function decodeProjectHash(hash: string): string | null {
 			} catch { /* ignore */ }
 			return null;
 		}
-		// Try consuming 1 to remaining segments (shortest first — most common case)
-		for (let len = 1; len <= segments.length - idx; len++) {
-			const part = segments.slice(idx, idx + len).join('-');
-			const next = current + '/' + part;
-			try {
-				if (fs.statSync(next).isDirectory()) {
-					if (idx + len === segments.length) return next;
-					const result = resolve(idx + len, next);
-					if (result) return result;
-				}
-			} catch { /* path doesn't exist */ }
+		// Empty segment from '--': component starts with '.' or '-' (both encode as '-')
+		// e.g. '/.claude' → '--claude', '/-Users-...' → '--Users-...'
+		const prefixes = segments[idx] === '' ? ['.', '-'] : [''];
+		for (const prefix of prefixes) {
+			const startIdx = prefix ? idx + 1 : idx;
+			if (startIdx >= segments.length) continue;
+			// Try consuming 1 to remaining segments (shortest first — most common case)
+			for (let len = 1; len <= segments.length - startIdx; len++) {
+				const part = prefix + segments.slice(startIdx, startIdx + len).join('-');
+				const next = current + '/' + part;
+				try {
+					if (fs.statSync(next).isDirectory()) {
+						if (startIdx + len === segments.length) return next;
+						const result = resolve(startIdx + len, next);
+						if (result) return result;
+					}
+				} catch { /* path doesn't exist */ }
+			}
 		}
 		return null;
 	}
 
-	return resolve(0, '');
+	const decoded = resolve(0, '');
+	if (!decoded) return null;
+
+	// If decoded path is inside ~/.claude/projects/, it's a meta-project —
+	// recursively decode the inner hash to find the real workspace
+	const projectsPrefix = path.join(os.homedir(), '.claude', 'projects') + '/';
+	if (decoded.startsWith(projectsPrefix)) {
+		const innerHash = path.basename(decoded);
+		const inner = decodeProjectHash(innerHash);
+		if (inner) return inner;
+	}
+
+	return decoded;
 }
 
 export class ProjectScanner {

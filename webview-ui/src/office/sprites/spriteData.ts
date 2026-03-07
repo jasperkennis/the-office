@@ -272,6 +272,33 @@ export const LAMP_SPRITE: SpriteData = (() => {
   ]
 })()
 
+/** Wooden shipping crate: 16x16 (1x1 tile) — warehouse storage box */
+export const CRATE_SPRITE: SpriteData = (() => {
+  const W = '#8B6914' // wood plank
+  const L = '#A07828' // lighter wood
+  const D = '#6B4E0A' // dark edge / nail
+  const S = '#B8922E' // surface highlight
+  const E = '#5A3D08' // darkest edge
+  return [
+    [_, _, E, D, D, D, D, D, D, D, D, D, D, E, _, _],
+    [_, E, D, W, W, W, W, W, W, W, W, W, W, D, E, _],
+    [E, D, W, L, L, L, L, L, L, L, L, L, L, W, D, E],
+    [D, W, L, S, L, L, L, L, L, L, L, L, S, L, W, D],
+    [D, W, L, L, L, L, L, L, L, L, L, L, L, L, W, D],
+    [D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D],
+    [D, W, L, L, L, L, L, L, L, L, L, L, L, L, W, D],
+    [D, W, L, L, L, L, L, S, S, L, L, L, L, L, W, D],
+    [D, W, L, L, L, L, S, S, S, S, L, L, L, L, W, D],
+    [D, W, L, L, L, L, L, S, S, L, L, L, L, L, W, D],
+    [D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D],
+    [D, W, L, L, L, L, L, L, L, L, L, L, L, L, W, D],
+    [D, W, L, S, L, L, L, L, L, L, L, L, S, L, W, D],
+    [E, D, W, L, L, L, L, L, L, L, L, L, L, W, D, E],
+    [_, E, D, W, W, W, W, W, W, W, W, W, W, D, E, _],
+    [_, _, E, D, D, D, D, D, D, D, D, D, D, E, _, _],
+  ]
+})()
+
 // ── Speech Bubble Sprites ───────────────────────────────────────
 
 /** Permission bubble: white square with "..." in amber, and a tail pointer (11x13) */

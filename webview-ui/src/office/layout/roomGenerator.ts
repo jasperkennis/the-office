@@ -13,6 +13,10 @@ import {
   CONFERENCE_ROOM_WIDTH,
   CONFERENCE_ROOM_SPOTS,
   CONFERENCE_FLOOR_COLOR,
+  WAREHOUSE_ROOM_NAME,
+  WAREHOUSE_MIN_WIDTH,
+  WAREHOUSE_FLOOR_COLOR,
+  WAREHOUSE_MIN_CRATES,
 } from '../../constants.js'
 
 export interface RoomInfo {
@@ -25,6 +29,8 @@ export interface RoomInfo {
   activitySpots: ActivitySpot[]
   /** Whether this is the shared conference room */
   isConferenceRoom?: boolean
+  /** Whether this is the warehouse */
+  isWarehouse?: boolean
 }
 
 export interface GeneratedLayout {
@@ -59,10 +65,18 @@ export function generateRoomLayout(
     return { name: p.name, seatCount, deskPairs, interiorWidth, roomWidth }
   })
 
-  // Total layout dimensions (project rooms + gap + conference room)
+  // Calculate warehouse dimensions based on total agents
+  const totalAgents = projects.reduce((sum, p) => sum + p.agentCount, 0)
+  const crateCount = Math.max(totalAgents, WAREHOUSE_MIN_CRATES)
+  // Crates in 2 rows, with 1-tile padding on each side + walls
+  const crateCols = Math.ceil(crateCount / 2)
+  const warehouseInteriorWidth = Math.max(WAREHOUSE_MIN_WIDTH - 2, 2 + crateCols)
+  const warehouseWidth = warehouseInteriorWidth + 2
+
+  // Total layout dimensions (project rooms + gap + conference room + gap + warehouse)
   const totalRows = ROOM_LABEL_ROWS + ROOM_HEIGHT
   const projectColsTotal = roomSpecs.reduce((sum, r) => sum + r.roomWidth, 0) + ROOM_GAP_COLS * (roomSpecs.length - 1)
-  const totalCols = projectColsTotal + ROOM_GAP_COLS + CONFERENCE_ROOM_WIDTH
+  const totalCols = projectColsTotal + ROOM_GAP_COLS + CONFERENCE_ROOM_WIDTH + ROOM_GAP_COLS + warehouseWidth
 
   // Initialize tiles with VOID
   const tiles: TileTypeVal[] = new Array(totalRows * totalCols).fill(TileType.VOID)
@@ -337,6 +351,74 @@ export function generateRoomLayout(
     seatUids: [],
     activitySpots: confSpots,
     isConferenceRoom: true,
+  })
+
+  // ── Warehouse ─────────────────────────────────────────────────
+  // One crate per agent — The Office-style storage for agent memory
+  const whCol = confCol + confWidth + ROOM_GAP_COLS
+  const whRow = ROOM_LABEL_ROWS
+
+  // Fill warehouse tiles
+  for (let r = 0; r < ROOM_HEIGHT; r++) {
+    for (let c = 0; c < warehouseWidth; c++) {
+      const tileRow = whRow + r
+      const tileCol = whCol + c
+      const idx = tileRow * totalCols + tileCol
+
+      const isTopWall = r === 0
+      const isBottomWall = r === ROOM_HEIGHT - 1
+      const isLeftWall = c === 0
+      const isRightWall = c === warehouseWidth - 1
+
+      if (isBottomWall) {
+        // Wide double door in the center
+        const doorCenter = Math.floor(warehouseWidth / 2)
+        if (c === doorCenter || c === doorCenter - 1) {
+          tiles[idx] = TileType.FLOOR_1
+          tileColors[idx] = WAREHOUSE_FLOOR_COLOR
+        } else {
+          tiles[idx] = TileType.WALL
+          tileColors[idx] = DEFAULT_WALL_COLOR
+        }
+        continue
+      }
+
+      if (isTopWall || isLeftWall || isRightWall) {
+        tiles[idx] = TileType.WALL
+        tileColors[idx] = DEFAULT_WALL_COLOR
+        continue
+      }
+
+      tiles[idx] = TileType.FLOOR_1
+      tileColors[idx] = WAREHOUSE_FLOOR_COLOR
+    }
+  }
+
+  // Place crates in 2 rows (rows 2 and 4 interior, relative to room)
+  let cratesPlaced = 0
+  for (let row = 0; row < 2 && cratesPlaced < crateCount; row++) {
+    const crateRow = whRow + 2 + row * 2 // rows 2 and 4 relative to room
+    for (let col = 0; col < crateCols && cratesPlaced < crateCount; col++) {
+      const crateCol = whCol + 1 + col // skip left wall
+      furniture.push({
+        uid: `warehouse:crate-${cratesPlaced}`,
+        type: FurnitureType.CRATE,
+        col: crateCol,
+        row: crateRow,
+      })
+      cratesPlaced++
+    }
+  }
+
+  rooms.push({
+    projectName: WAREHOUSE_ROOM_NAME,
+    col: whCol,
+    row: whRow,
+    width: warehouseWidth,
+    height: ROOM_HEIGHT,
+    seatUids: [],
+    activitySpots: [],
+    isWarehouse: true,
   })
 
   return {

@@ -8,6 +8,7 @@ export {
   CHAIR_SPRITE,
   PC_SPRITE,
   LAMP_SPRITE,
+  CRATE_SPRITE,
   getCharacterSprites,
 } from './spriteData.js'
 export type { CharacterSprites } from './spriteData.js'
