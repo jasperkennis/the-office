@@ -342,6 +342,16 @@ function handleClientMessage(
 		if (!launched) {
 			console.log(`[Standalone] Failed to launch iTerm session for ${sessionId}`);
 		}
+	} else if (msg.type === 'forgetAgent') {
+		const sessionId = msg.sessionId as string;
+		console.log(`[Standalone] Forgetting agent ${sessionId}`);
+		const seats = readJson(SEATS_FILE) as Record<string, unknown> | null;
+		if (seats && sessionId in seats) {
+			delete seats[sessionId];
+			writeJson(SEATS_FILE, seats);
+		}
+		// Broadcast updated offline agents list
+		broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
 	} else if (msg.type === 'setSoundEnabled') {
 		writeJson(SETTINGS_FILE, { soundEnabled: msg.enabled });
 	} else if (msg.type === 'openClaude' || msg.type === 'closeAgent' || msg.type === 'openSessionsFolder') {

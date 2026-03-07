@@ -216,6 +216,12 @@ export interface Character {
   projectName?: string
   /** Session ID for metadata persistence (stable across restarts) */
   sessionId?: string
+  /** Short role description (e.g. "Frontend Dev") */
+  roleShort?: string
+  /** Full role description */
+  roleFull?: string
+  /** Workspace root directory path */
+  workspacePath?: string
   /** Whether the character is standing at an activity spot (not seated) */
   atActivitySpot: boolean
   /** Current activity spot target, or null if heading to seat */

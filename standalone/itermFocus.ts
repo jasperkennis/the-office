@@ -61,7 +61,7 @@ on run argv
 	if cwd is not "" then
 		set cmd to "cd " & quoted form of cwd & " && "
 	end if
-	set cmd to cmd & "claude --session-id " & sid
+	set cmd to cmd & "claude --resume " & sid
 	tell application "iTerm2"
 		activate
 		if (count of windows) = 0 then

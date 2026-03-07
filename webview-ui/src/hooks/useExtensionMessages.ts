@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
 import type { ToolActivity, ConversationEntry } from '../office/types.js'
 import { extractToolName } from '../office/toolUtils.js'
@@ -67,6 +67,8 @@ export interface ExtensionMessageState {
   workspaceFolders: WorkspaceFolder[]
   agentConversation: Record<number, ConversationEntry[]>
   offlineAgents: OfflineAgent[]
+  saveAgentMeta: () => void
+  forgetAgent: (sessionId: string) => void
 }
 
 export function useExtensionMessages(
@@ -84,6 +86,10 @@ export function useExtensionMessages(
   const [agentConversation, setAgentConversation] = useState<Record<number, ConversationEntry[]>>({})
   const [offlineAgents, setOfflineAgents] = useState<OfflineAgent[]>([])
 
+  // Ref to expose saveAgentMeta and forgetAgent outside the effect closure
+  const saveAgentMetaRef = useRef<() => void>(() => {})
+  const forgetAgentRef = useRef<(sessionId: string) => void>(() => {})
+
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
 
@@ -92,22 +98,28 @@ export function useExtensionMessages(
 
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
-    let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; name?: string; sessionId?: string; folderName?: string }> = []
+    let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string; name?: string; sessionId?: string; folderName?: string; roleShort?: string; roleFull?: string; workspacePath?: string }> = []
 
     // Cached metadata from seats.json (keyed by sessionId)
-    let cachedMeta: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }> = {}
+    let cachedMeta: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string; roleShort?: string; roleFull?: string; workspacePath?: string }> = {}
 
     /** Save all non-sub-agent character metadata keyed by sessionId */
     function saveAgentMeta(os: OfficeState): void {
-      const seats: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }> = {}
+      const seats: Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string; roleShort?: string; roleFull?: string; workspacePath?: string }> = {}
       for (const ch of os.characters.values()) {
         if (ch.isSubagent || !ch.sessionId) continue
-        seats[ch.sessionId] = { name: ch.name, palette: ch.palette, hueShift: ch.hueShift, seatId: ch.seatId ?? undefined }
+        seats[ch.sessionId] = { name: ch.name, palette: ch.palette, hueShift: ch.hueShift, seatId: ch.seatId ?? undefined, roleShort: ch.roleShort, roleFull: ch.roleFull, workspacePath: ch.workspacePath }
       }
       // Merge with cached meta to preserve data for offline agents
       const merged = { ...cachedMeta, ...seats }
       cachedMeta = merged
       vscode.postMessage({ type: 'saveAgentSeats', seats: merged })
+    }
+
+    saveAgentMetaRef.current = () => saveAgentMeta(getOfficeState())
+    forgetAgentRef.current = (sessionId: string) => {
+      delete cachedMeta[sessionId]
+      vscode.postMessage({ type: 'forgetAgent', sessionId })
     }
 
     const handler = (e: MessageEvent) => {
@@ -123,6 +135,12 @@ export function useExtensionMessages(
         // First add buffered agents so their project names are counted
         for (const p of pendingAgents) {
           os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName, p.sessionId, p.name)
+          const ch = os.characters.get(p.id)
+          if (ch) {
+            if (p.roleShort) ch.roleShort = p.roleShort
+            if (p.roleFull) ch.roleFull = p.roleFull
+            if (p.workspacePath) ch.workspacePath = p.workspacePath
+          }
         }
         pendingAgents = []
         os.regenerateRoomLayout(knownProjectsRef.current)
@@ -138,6 +156,14 @@ export function useExtensionMessages(
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
         setSelectedAgent(id)
         os.addAgent(id, m?.palette, m?.hueShift, m?.seatId, undefined, folderName, sessionId, m?.name)
+        if (m) {
+          const ch = os.characters.get(id)
+          if (ch) {
+            if (m.roleShort) ch.roleShort = m.roleShort
+            if (m.roleFull) ch.roleFull = m.roleFull
+            if (m.workspacePath) ch.workspacePath = m.workspacePath
+          }
+        }
         os.regenerateRoomLayout(knownProjectsRef.current)
         saveAgentMeta(os)
       } else if (msg.type === 'agentClosed') {
@@ -175,7 +201,7 @@ export function useExtensionMessages(
         os.regenerateRoomLayout(knownProjectsRef.current)
       } else if (msg.type === 'existingAgents') {
         const incoming = msg.agents as number[]
-        const meta = (msg.agentMeta || {}) as Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string }>
+        const meta = (msg.agentMeta || {}) as Record<string, { name?: string; palette?: number; hueShift?: number; seatId?: string; roleShort?: string; roleFull?: string; workspacePath?: string }>
         const sessionIds = (msg.sessionIds || {}) as Record<number, string>
         const folderNames = (msg.folderNames || {}) as Record<number, string>
         // Cache metadata for later lookups (e.g. new agents arriving with known sessionId)
@@ -185,7 +211,7 @@ export function useExtensionMessages(
           const sid = sessionIds[id]
           // Try sessionId-keyed metadata first, fall back to agentId-keyed (extension compat)
           const m = (sid ? meta[sid] : undefined) || meta[id]
-          pendingAgents.push({ id, palette: m?.palette, hueShift: m?.hueShift, seatId: m?.seatId, name: m?.name, sessionId: sid, folderName: folderNames[id] })
+          pendingAgents.push({ id, palette: m?.palette, hueShift: m?.hueShift, seatId: m?.seatId, name: m?.name, sessionId: sid, folderName: folderNames[id], roleShort: m?.roleShort, roleFull: m?.roleFull, workspacePath: m?.workspacePath })
         }
         setAgents((prev) => {
           const ids = new Set(prev)
@@ -410,5 +436,8 @@ export function useExtensionMessages(
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, selectedAgent, selectAgent: setSelectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, agentConversation, offlineAgents }
+  const saveAgentMeta = useCallback(() => saveAgentMetaRef.current(), [])
+  const forgetAgent = useCallback((sessionId: string) => forgetAgentRef.current(sessionId), [])
+
+  return { agents, selectedAgent, selectAgent: setSelectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, agentConversation, offlineAgents, saveAgentMeta, forgetAgent }
 }
