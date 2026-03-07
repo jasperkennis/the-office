@@ -9,6 +9,10 @@ import {
   ROOM_MIN_INTERIOR_WIDTH,
   ROOM_FLOOR_COLOR,
   DEFAULT_WALL_COLOR,
+  CONFERENCE_ROOM_NAME,
+  CONFERENCE_ROOM_WIDTH,
+  CONFERENCE_ROOM_SPOTS,
+  CONFERENCE_FLOOR_COLOR,
 } from '../../constants.js'
 
 export interface RoomInfo {
@@ -19,6 +23,8 @@ export interface RoomInfo {
   height: number
   seatUids: string[]
   activitySpots: ActivitySpot[]
+  /** Whether this is the shared conference room */
+  isConferenceRoom?: boolean
 }
 
 export interface GeneratedLayout {
@@ -53,9 +59,10 @@ export function generateRoomLayout(
     return { name: p.name, seatCount, deskPairs, interiorWidth, roomWidth }
   })
 
-  // Total layout dimensions
+  // Total layout dimensions (project rooms + gap + conference room)
   const totalRows = ROOM_LABEL_ROWS + ROOM_HEIGHT
-  const totalCols = roomSpecs.reduce((sum, r) => sum + r.roomWidth, 0) + ROOM_GAP_COLS * (roomSpecs.length - 1)
+  const projectColsTotal = roomSpecs.reduce((sum, r) => sum + r.roomWidth, 0) + ROOM_GAP_COLS * (roomSpecs.length - 1)
+  const totalCols = projectColsTotal + ROOM_GAP_COLS + CONFERENCE_ROOM_WIDTH
 
   // Initialize tiles with VOID
   const tiles: TileTypeVal[] = new Array(totalRows * totalCols).fill(TileType.VOID)
@@ -230,6 +237,107 @@ export function generateRoomLayout(
 
     colOffset += spec.roomWidth + ROOM_GAP_COLS
   }
+
+  // ── Conference Room ──────────────────────────────────────────
+  // Shared room at the end, agents go here when reading each other's transcripts
+  const confCol = colOffset
+  const confRow = ROOM_LABEL_ROWS
+  const confWidth = CONFERENCE_ROOM_WIDTH
+
+  // Fill conference room tiles
+  for (let r = 0; r < ROOM_HEIGHT; r++) {
+    for (let c = 0; c < confWidth; c++) {
+      const tileRow = confRow + r
+      const tileCol = confCol + c
+      const idx = tileRow * totalCols + tileCol
+
+      const isTopWall = r === 0
+      const isBottomWall = r === ROOM_HEIGHT - 1
+      const isLeftWall = c === 0
+      const isRightWall = c === confWidth - 1
+
+      if (isBottomWall) {
+        const doorCol = Math.floor(confWidth / 2)
+        if (c === doorCol) {
+          tiles[idx] = TileType.FLOOR_1
+          tileColors[idx] = CONFERENCE_FLOOR_COLOR
+        } else {
+          tiles[idx] = TileType.WALL
+          tileColors[idx] = DEFAULT_WALL_COLOR
+        }
+        continue
+      }
+
+      if (isTopWall || isLeftWall || isRightWall) {
+        tiles[idx] = TileType.WALL
+        tileColors[idx] = DEFAULT_WALL_COLOR
+        continue
+      }
+
+      tiles[idx] = TileType.FLOOR_1
+      tileColors[idx] = CONFERENCE_FLOOR_COLOR
+    }
+  }
+
+  // Conference table: 2 desks (2x2 each) forming a 4x2 table in the center
+  const tableCol = confCol + 2
+  const tableRow = confRow + 2
+  furniture.push({
+    uid: 'conference:desk-0',
+    type: FurnitureType.DESK,
+    col: tableCol,
+    row: tableRow,
+  })
+  furniture.push({
+    uid: 'conference:desk-1',
+    type: FurnitureType.DESK,
+    col: tableCol + 2,
+    row: tableRow,
+  })
+
+  // Conference activity spots: positions around the table
+  // Agents stand around the table facing inward
+  const confSpots: ActivitySpot[] = []
+  const spotPositions = [
+    // Above table (row 1), facing down
+    { col: tableCol, row: confRow + 1, dir: Direction.DOWN },
+    { col: tableCol + 3, row: confRow + 1, dir: Direction.DOWN },
+    // Below table (row 4), facing up
+    { col: tableCol, row: confRow + 4, dir: Direction.UP },
+    { col: tableCol + 3, row: confRow + 4, dir: Direction.UP },
+  ]
+
+  for (let i = 0; i < Math.min(CONFERENCE_ROOM_SPOTS, spotPositions.length); i++) {
+    const pos = spotPositions[i]
+    confSpots.push({
+      uid: `conference:spot-${i}`,
+      toolCategory: 'conference',
+      standCol: pos.col,
+      standRow: pos.row,
+      facingDir: pos.dir,
+      occupiedBy: null,
+    })
+  }
+
+  // Whiteboard on top wall of conference room
+  const confWbCol = confCol + Math.floor(confWidth / 2) - 1
+  furniture.push({
+    uid: 'conference:whiteboard',
+    type: FurnitureType.WHITEBOARD,
+    col: confWbCol,
+    row: confRow,
+  })
+
+  rooms.push({
+    projectName: CONFERENCE_ROOM_NAME,
+    col: confCol,
+    row: confRow,
+    width: confWidth,
+    height: ROOM_HEIGHT,
+    seatUids: [],
+    activitySpots: confSpots,
+    isConferenceRoom: true,
+  })
 
   return {
     layout: {

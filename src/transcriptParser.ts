@@ -119,6 +119,24 @@ export function processTranscriptLine(
 							toolId: block.id,
 							status,
 						});
+
+						// Detect conference: agent reading another agent's JSONL transcript
+						if (toolName === 'Read') {
+							const filePath = (block.input as Record<string, unknown>)?.file_path;
+							if (typeof filePath === 'string' && filePath.includes('.claude/projects/') && filePath.endsWith('.jsonl')) {
+								for (const [otherId, otherAgent] of agents) {
+									if (otherId !== agentId && otherAgent.jsonlFile && filePath.endsWith(path.basename(otherAgent.jsonlFile))) {
+										console.log(`[Pixel Agents] Conference: agent ${agentId} reading agent ${otherId}'s transcript`);
+										webview?.postMessage({
+											type: 'agentConference',
+											readerId: agentId,
+											targetId: otherId,
+										});
+										break;
+									}
+								}
+							}
+						}
 					}
 				}
 				if (hasNonExemptTool) {

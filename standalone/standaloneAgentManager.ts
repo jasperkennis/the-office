@@ -65,7 +65,7 @@ export class StandaloneAgentManager {
 		return this.fileToAgent.has(jsonlFile);
 	}
 
-	addSession(projectDir: string, jsonlFile: string, projectName: string, workspacePath?: string): void {
+	addSession(projectDir: string, jsonlFile: string, projectName: string, workspacePath?: string, persistentAgentId?: string): void {
 		if (this.fileToAgent.has(jsonlFile)) return;
 
 		const sessionId = path.basename(jsonlFile, '.jsonl');
@@ -90,6 +90,7 @@ export class StandaloneAgentManager {
 			projectName,
 			conversationBuffer: [],
 			workspacePath,
+			persistentAgentId,
 		};
 
 		this.agents.set(id, agent);

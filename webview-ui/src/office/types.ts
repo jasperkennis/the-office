@@ -222,6 +222,8 @@ export interface Character {
   roleFull?: string
   /** Workspace root directory path */
   workspacePath?: string
+  /** Linked persistent agent ID */
+  persistentAgentId?: string
   /** Whether the character is standing at an activity spot (not seated) */
   atActivitySpot: boolean
   /** Current activity spot target, or null if heading to seat */

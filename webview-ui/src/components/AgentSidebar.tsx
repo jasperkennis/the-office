@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ToolActivity } from '../office/types.js'
 import type { OfficeState } from '../office/engine/officeState.js'
-import type { OfflineAgent } from '../hooks/useExtensionMessages.js'
+import type { OfflineAgent, KnownProject } from '../hooks/useExtensionMessages.js'
 import { vscode } from '../vscodeApi.js'
 
 interface AgentSidebarProps {
@@ -12,6 +12,7 @@ interface AgentSidebarProps {
   agentTools: Record<number, ToolActivity[]>
   agentStatuses: Record<number, string>
   offlineAgents: OfflineAgent[]
+  knownProjects: KnownProject[]
   onSaveAgentMeta: () => void
   onForgetAgent: (sessionId: string) => void
 }
@@ -64,38 +65,41 @@ function getDotInfo(
   return null
 }
 
-/** Group agent IDs by their room/project name */
-function groupByRoom(agents: number[], officeState: OfficeState): Map<string, number[]> {
-  const groups = new Map<string, number[]>()
-  // Use room order from officeState.rooms so groups match spatial layout
-  for (const room of officeState.rooms) {
-    groups.set(room.projectName, [])
+interface RoomGroup {
+  liveAgents: number[]
+  offlineAgents: OfflineAgent[]
+}
+
+/** Group live + offline agents by their room/project name */
+function groupByRoom(
+  agents: number[],
+  officeState: OfficeState,
+  offlineAgents: OfflineAgent[],
+  knownProjects: KnownProject[],
+): Map<string, RoomGroup> {
+  const groups = new Map<string, RoomGroup>()
+  const ensure = (name: string) => {
+    if (!groups.has(name)) groups.set(name, { liveAgents: [], offlineAgents: [] })
+    return groups.get(name)!
   }
+  // Seed with rooms from officeState + known projects
+  for (const room of officeState.rooms) {
+    ensure(room.projectName)
+  }
+  for (const kp of knownProjects) {
+    ensure(kp.name)
+  }
+  // Add live agents
   for (const id of agents) {
     const ch = officeState.characters.get(id)
     if (!ch || ch.isSubagent) continue
     const project = ch.projectName || ch.folderName || ''
-    let list = groups.get(project)
-    if (!list) {
-      list = []
-      groups.set(project, list)
-    }
-    list.push(id)
+    ensure(project).liveAgents.push(id)
   }
-  return groups
-}
-
-/** Group offline agents by project name */
-function groupOfflineByProject(offlineAgents: OfflineAgent[]): Map<string, OfflineAgent[]> {
-  const groups = new Map<string, OfflineAgent[]>()
+  // Add offline agents
   for (const agent of offlineAgents) {
     const project = agent.projectName || 'Unknown'
-    let list = groups.get(project)
-    if (!list) {
-      list = []
-      groups.set(project, list)
-    }
-    list.push(agent)
+    ensure(project).offlineAgents.push(agent)
   }
   return groups
 }
@@ -186,27 +190,52 @@ const deleteButtonStyle: React.CSSProperties = {
 
 interface EmployeeFileProps {
   officeState: OfficeState
-  agentId: number
+  /** Live character ID to edit, or null for creating a new agent */
+  agentId: number | null
+  /** Offline persistent agent to edit, or undefined */
+  offlineAgent?: OfflineAgent
   onClose: () => void
   onSave: () => void
+  /** If true, immediately launch the agent after saving */
+  launchAfterSave?: boolean
 }
 
-function EmployeeFile({ officeState, agentId, onClose, onSave }: EmployeeFileProps) {
-  const ch = officeState.characters.get(agentId)
-  if (!ch) return null
+function EmployeeFile({ officeState, agentId, offlineAgent, onClose, onSave, launchAfterSave }: EmployeeFileProps) {
+  const ch = agentId !== null ? officeState.characters.get(agentId) : null
 
-  const [name, setName] = useState(ch.name || '')
-  const [roleShort, setRoleShort] = useState(ch.roleShort || '')
-  const [roleFull, setRoleFull] = useState(ch.roleFull || '')
-  const [workspacePath, setWorkspacePath] = useState(ch.workspacePath || '')
+  const [name, setName] = useState(ch?.name || offlineAgent?.name || '')
+  const [roleShort, setRoleShort] = useState(ch?.roleShort || offlineAgent?.roleShort || '')
+  const [roleFull, setRoleFull] = useState(ch?.roleFull || offlineAgent?.roleFull || '')
+  const [workspacePath, setWorkspacePath] = useState(ch?.workspacePath || offlineAgent?.workspacePath || '')
+
+  const persistentId = ch?.persistentAgentId || (offlineAgent?.isPersistent ? offlineAgent.sessionId : undefined)
 
   const handleSave = () => {
-    const character = officeState.characters.get(agentId)
-    if (!character) return
-    character.name = name
-    character.roleShort = roleShort
-    character.roleFull = roleFull
-    character.workspacePath = workspacePath || undefined
+    // Update live character if editing one
+    if (ch) {
+      ch.name = name
+      ch.roleShort = roleShort
+      ch.roleFull = roleFull
+      ch.workspacePath = workspacePath || undefined
+    }
+
+    // Save as persistent agent identity
+    vscode.postMessage({
+      type: 'saveAgentIdentity',
+      agent: {
+        id: persistentId || undefined,
+        name,
+        roleShort,
+        roleFull,
+        workspacePath: workspacePath || '',
+        palette: ch?.palette,
+        hueShift: ch?.hueShift,
+        seatId: ch?.seatId,
+        currentSessionId: ch?.sessionId,
+      },
+      launch: launchAfterSave || false,
+    })
+
     onSave()
     onClose()
   }
@@ -339,7 +368,7 @@ function EmployeeFile({ officeState, agentId, onClose, onSave }: EmployeeFilePro
             alignSelf: 'flex-end',
           }}
         >
-          Save
+          {launchAfterSave ? 'Save & Launch' : 'Save'}
         </button>
       </div>
     </div>
@@ -354,17 +383,22 @@ export function AgentSidebar({
   agentTools,
   agentStatuses,
   offlineAgents,
+  knownProjects,
   onSaveAgentMeta,
   onForgetAgent,
 }: AgentSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [hoveredOffline, setHoveredOffline] = useState<string | null>(null)
-  const [offlineCollapsed, setOfflineCollapsed] = useState(true)
   const [editingAgentId, setEditingAgentId] = useState<number | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string } | null>(null)
+  const [editingOfflineAgent, setEditingOfflineAgent] = useState<OfflineAgent | undefined>(undefined)
+  const [creatingNew, setCreatingNew] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
 
-  if (agents.length === 0 && offlineAgents.length === 0) return null
+  const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
+
+  // Always show sidebar — rooms exist even without agents
+  if (roomGroups.size === 0 && agents.length === 0 && offlineAgents.length === 0) return null
 
   const handleClick = (id: number) => {
     officeState.selectedAgentId = id
@@ -373,7 +407,7 @@ export function AgentSidebar({
     vscode.postMessage({ type: 'focusAgent', id })
   }
 
-  const roomGroups = groupByRoom(agents, officeState)
+  const showEmployeeFile = editingAgentId !== null || editingOfflineAgent !== undefined || creatingNew
 
   return (
     <>
@@ -381,18 +415,24 @@ export function AgentSidebar({
         <ConfirmDialog
           message={`Remove "${confirmDelete.name}" from memory? This cannot be undone.`}
           onConfirm={() => {
-            onForgetAgent(confirmDelete.sessionId)
+            if (confirmDelete.isPersistent) {
+              vscode.postMessage({ type: 'deleteAgentIdentity', agentId: confirmDelete.sessionId })
+            } else {
+              onForgetAgent(confirmDelete.sessionId)
+            }
             setConfirmDelete(null)
           }}
           onCancel={() => setConfirmDelete(null)}
         />
       )}
-      {editingAgentId !== null && (
+      {showEmployeeFile && (
         <EmployeeFile
           officeState={officeState}
           agentId={editingAgentId}
-          onClose={() => setEditingAgentId(null)}
+          offlineAgent={editingOfflineAgent}
+          onClose={() => { setEditingAgentId(null); setEditingOfflineAgent(undefined); setCreatingNew(false) }}
           onSave={onSaveAgentMeta}
+          launchAfterSave={creatingNew}
         />
       )}
       <div
@@ -437,276 +477,279 @@ export function AgentSidebar({
         {/* Agent list grouped by room */}
         {!collapsed && (
           <div style={{ overflowY: 'auto', overflowX: 'hidden' }}>
-            {[...roomGroups.entries()].map(([projectName, ids]) => {
-              if (ids.length === 0) return null
-              return (
-                <div key={projectName}>
-                  {/* Room header */}
-                  <div
-                    style={{
-                      padding: '3px 6px',
-                      fontSize: '16px',
-                      color: 'var(--pixel-green)',
-                      background: 'rgba(90, 200, 140, 0.08)',
-                      borderBottom: '1px solid var(--pixel-border)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {projectName || 'Unassigned'}
-                  </div>
+            {[...roomGroups.entries()].map(([projectName, group]) => (
+              <div key={projectName}>
+                {/* Room header */}
+                <div
+                  style={{
+                    padding: '3px 6px',
+                    fontSize: '16px',
+                    color: group.liveAgents.length > 0 ? 'var(--pixel-green)' : 'var(--pixel-text-dim)',
+                    background: group.liveAgents.length > 0 ? 'rgba(90, 200, 140, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                    borderBottom: '1px solid var(--pixel-border)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    userSelect: 'none',
+                  }}
+                >
+                  {projectName || 'Unassigned'}
+                </div>
 
-                  {/* Agents in this room */}
-                  {ids.map((id) => {
-                    const ch = officeState.characters.get(id)
-                    if (!ch) return null
+                {/* Live agents in this room */}
+                {group.liveAgents.map((id) => {
+                  const ch = officeState.characters.get(id)
+                  if (!ch) return null
 
-                    const isSelected = selectedAgent === id
-                    const isHovered = hoveredId === id
-                    const activity = getActivity(id, agentTools, ch.isActive)
-                    const dot = getDotInfo(id, agentTools, agentStatuses, ch.isActive)
-                    const status = agentStatuses[id]
-                    const isWaiting = status === 'waiting'
-                    const isIdle = !ch.isActive && !activity && !isWaiting
+                  const isSelected = selectedAgent === id
+                  const isHovered = hoveredId === id
+                  const activity = getActivity(id, agentTools, ch.isActive)
+                  const dot = getDotInfo(id, agentTools, agentStatuses, ch.isActive)
+                  const status = agentStatuses[id]
+                  const isWaiting = status === 'waiting'
+                  const isIdle = !ch.isActive && !activity && !isWaiting
 
-                    return (
-                      <div
-                        key={id}
-                        onClick={() => handleClick(id)}
-                        onMouseEnter={() => { setHoveredId(id); officeState.hoveredAgentId = id }}
-                        onMouseLeave={() => { setHoveredId(null); officeState.hoveredAgentId = null }}
-                        style={{
-                          padding: '4px 6px',
-                          cursor: 'pointer',
-                          background: isSelected
-                            ? 'var(--pixel-active-bg)'
-                            : isHovered
-                              ? 'var(--pixel-btn-hover-bg)'
-                              : 'transparent',
-                          borderBottom: '1px solid var(--pixel-border)',
-                        }}
-                      >
-                        {/* Name row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  return (
+                    <div
+                      key={id}
+                      onClick={() => handleClick(id)}
+                      onMouseEnter={() => { setHoveredId(id); officeState.hoveredAgentId = id }}
+                      onMouseLeave={() => { setHoveredId(null); officeState.hoveredAgentId = null }}
+                      style={{
+                        padding: '4px 6px',
+                        cursor: 'pointer',
+                        background: isSelected
+                          ? 'var(--pixel-active-bg)'
+                          : isHovered
+                            ? 'var(--pixel-btn-hover-bg)'
+                            : 'transparent',
+                        borderBottom: '1px solid var(--pixel-border)',
+                      }}
+                    >
+                      {/* Name row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span
+                          className={dot?.pulse ? 'pixel-agents-pulse' : undefined}
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: dot ? dot.color : 'rgba(255,255,255,0.2)',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                          }}
+                        >
                           <span
-                            className={dot?.pulse ? 'pixel-agents-pulse' : undefined}
                             style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: dot ? dot.color : 'rgba(255,255,255,0.2)',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              flex: 1,
+                              fontSize: '20px',
+                              color: isSelected ? '#fff' : 'var(--pixel-text)',
+                              fontWeight: isSelected ? 'bold' : undefined,
                             }}
                           >
+                            {ch.name || `Agent #${id}`}
+                          </span>
+                          {ch.roleShort && (
                             <span
                               style={{
-                                fontSize: '20px',
-                                color: isSelected ? '#fff' : 'var(--pixel-text)',
-                                fontWeight: isSelected ? 'bold' : undefined,
+                                fontSize: '16px',
+                                color: 'var(--pixel-accent)',
+                                marginLeft: 6,
                               }}
                             >
-                              {ch.name || `Agent #${id}`}
+                              {ch.roleShort}
                             </span>
-                            {ch.roleShort && (
-                              <span
-                                style={{
-                                  fontSize: '16px',
-                                  color: 'var(--pixel-accent)',
-                                  marginLeft: 6,
-                                }}
-                              >
-                                {ch.roleShort}
-                              </span>
-                            )}
-                          </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingAgentId(id)
+                            setEditingOfflineAgent(undefined)
+                            setCreatingNew(false)
+                          }}
+                          title="Employee file"
+                          style={{
+                            ...deleteButtonStyle,
+                            color: isHovered || isSelected ? 'var(--pixel-text-dim)' : 'transparent',
+                          }}
+                        >
+                          {'\u270E'}
+                        </button>
+                        {ch.sessionId && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setEditingAgentId(id)
+                              setConfirmDelete({ sessionId: ch.persistentAgentId || ch.sessionId!, name: ch.name || `Agent #${id}`, isPersistent: !!ch.persistentAgentId })
                             }}
-                            title="Employee file"
+                            title="Remove from memory"
                             style={{
                               ...deleteButtonStyle,
                               color: isHovered || isSelected ? 'var(--pixel-text-dim)' : 'transparent',
                             }}
                           >
-                            {'\u270E'}
-                          </button>
-                          {ch.sessionId && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setConfirmDelete({ sessionId: ch.sessionId!, name: ch.name || `Agent #${id}` })
-                              }}
-                              title="Remove from memory"
-                              style={{
-                                ...deleteButtonStyle,
-                                color: isHovered || isSelected ? 'var(--pixel-text-dim)' : 'transparent',
-                              }}
-                            >
-                              {'\u{1F5D1}'}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Activity row */}
-                        {(activity || isWaiting || isIdle) && (
-                          <div
-                            style={{
-                              fontSize: '16px',
-                              color: 'var(--pixel-text-dim)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              paddingLeft: 10,
-                              marginTop: 1,
-                            }}
-                          >
-                            {isWaiting ? 'Waiting for input' : activity || (ch.isActive ? 'Thinking...' : 'Idle')}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Offline agents section */}
-        {offlineAgents.length > 0 && (
-          <>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '4px 6px',
-                borderTop: '2px solid var(--pixel-border)',
-                cursor: 'pointer',
-              }}
-              onClick={() => setOfflineCollapsed((p) => !p)}
-            >
-              <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)', userSelect: 'none' }}>
-                Offline ({offlineAgents.length})
-              </span>
-              <span style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', userSelect: 'none', marginLeft: 6 }}>
-                {offlineCollapsed ? '\u25B6' : '\u25BC'}
-              </span>
-            </div>
-
-            {!offlineCollapsed && (
-              <div style={{ overflowY: 'auto', overflowX: 'hidden' }}>
-                {[...groupOfflineByProject(offlineAgents).entries()].map(([projectName, offAgents]) => (
-                  <div key={`offline-${projectName}`}>
-                    <div
-                      style={{
-                        padding: '3px 6px',
-                        fontSize: '16px',
-                        color: 'var(--pixel-text-dim)',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderBottom: '1px solid var(--pixel-border)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {projectName}
-                    </div>
-                    {offAgents.map((agent) => (
-                      <div
-                        key={agent.sessionId}
-                        onMouseEnter={() => setHoveredOffline(agent.sessionId)}
-                        onMouseLeave={() => setHoveredOffline(null)}
-                        style={{
-                          padding: '4px 6px',
-                          background: hoveredOffline === agent.sessionId ? 'var(--pixel-btn-hover-bg)' : 'transparent',
-                          borderBottom: '1px solid var(--pixel-border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 4,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: 'rgba(255,255,255,0.1)',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: '20px',
-                              color: 'var(--pixel-text-dim)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {agent.name || agent.sessionId.slice(0, 8)}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setConfirmDelete({ sessionId: agent.sessionId, name: agent.name || agent.sessionId.slice(0, 8) })
-                            }}
-                            title="Remove from memory"
-                            style={{
-                              ...deleteButtonStyle,
-                              color: hoveredOffline === agent.sessionId ? 'var(--pixel-text-dim)' : 'transparent',
-                            }}
-                          >
                             {'\u{1F5D1}'}
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
+                        )}
+                      </div>
+
+                      {/* Activity row */}
+                      {(activity || isWaiting || isIdle) && (
+                        <div
+                          style={{
+                            fontSize: '16px',
+                            color: 'var(--pixel-text-dim)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            paddingLeft: 10,
+                            marginTop: 1,
+                          }}
+                        >
+                          {isWaiting ? 'Waiting for input' : activity || (ch.isActive ? 'Thinking...' : 'Idle')}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Offline agents in this room */}
+                {group.offlineAgents.map((agent) => {
+                  const isHovered = hoveredOffline === agent.sessionId
+                  return (
+                    <div
+                      key={`offline-${agent.sessionId}`}
+                      onMouseEnter={() => setHoveredOffline(agent.sessionId)}
+                      onMouseLeave={() => setHoveredOffline(null)}
+                      style={{
+                        padding: '4px 6px',
+                        background: isHovered ? 'var(--pixel-btn-hover-bg)' : 'transparent',
+                        borderBottom: '1px solid var(--pixel-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: 'rgba(255,255,255,0.1)',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)' }}>
+                            {agent.name || agent.sessionId.slice(0, 8)}
+                          </span>
+                          {agent.roleShort && (
+                            <span style={{ fontSize: '16px', color: 'var(--pixel-accent)', marginLeft: 6, opacity: 0.7 }}>
+                              {agent.roleShort}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingAgentId(null)
+                            setEditingOfflineAgent(agent)
+                            setCreatingNew(false)
+                          }}
+                          title="Employee file"
+                          style={{
+                            ...deleteButtonStyle,
+                            color: isHovered ? 'var(--pixel-text-dim)' : 'transparent',
+                          }}
+                        >
+                          {'\u270E'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConfirmDelete({ sessionId: agent.sessionId, name: agent.name || agent.sessionId.slice(0, 8), isPersistent: agent.isPersistent })
+                          }}
+                          title="Remove from memory"
+                          style={{
+                            ...deleteButtonStyle,
+                            color: isHovered ? 'var(--pixel-text-dim)' : 'transparent',
+                          }}
+                        >
+                          {'\u{1F5D1}'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (agent.isPersistent) {
+                              vscode.postMessage({ type: 'launchAgent', agentId: agent.sessionId })
+                            } else {
                               vscode.postMessage({
                                 type: 'restartAgent',
                                 sessionId: agent.sessionId,
                                 workspacePath: agent.workspacePath,
                               })
-                            }}
-                            style={{
-                              padding: '2px 8px',
-                              fontSize: '16px',
-                              color: 'var(--pixel-agent-text)',
-                              background: 'var(--pixel-agent-bg)',
-                              border: '2px solid var(--pixel-agent-border)',
-                              borderRadius: 0,
-                              cursor: 'pointer',
-                              flexShrink: 0,
-                            }}
-                            title="Resume this session in iTerm"
-                          >
-                            Resume
-                          </button>
-                        </div>
+                            }
+                          }}
+                          style={{
+                            padding: '2px 8px',
+                            fontSize: '16px',
+                            color: 'var(--pixel-agent-text)',
+                            background: 'var(--pixel-agent-bg)',
+                            border: '2px solid var(--pixel-agent-border)',
+                            borderRadius: 0,
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                          title={agent.isPersistent ? 'Launch new session for this agent' : 'Resume this session in iTerm'}
+                        >
+                          {agent.isPersistent ? 'Launch' : 'Resume'}
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                    </div>
+                  )
+                })}
               </div>
-            )}
-          </>
+            ))}
+
+            {/* New Worker button */}
+            <div style={{ padding: '6px' }}>
+              <button
+                onClick={() => {
+                  setEditingAgentId(null)
+                  setEditingOfflineAgent(undefined)
+                  setCreatingNew(true)
+                }}
+                style={{
+                  width: '100%',
+                  padding: '4px 8px',
+                  fontSize: '18px',
+                  color: 'var(--pixel-agent-text)',
+                  background: 'var(--pixel-agent-bg)',
+                  border: '2px solid var(--pixel-agent-border)',
+                  borderRadius: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                + New Worker
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </>

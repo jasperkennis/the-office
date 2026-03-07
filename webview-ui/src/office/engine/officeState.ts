@@ -191,6 +191,18 @@ export class OfficeState {
 
   /** Find an unoccupied activity spot for the given tool category in the character's room */
   private findActivitySpot(ch: Character, toolCategory: string): ActivitySpot | null {
+    // Conference spots are shared across all projects — search conference room directly
+    if (toolCategory === 'conference') {
+      const confRoom = this.rooms.find((r) => r.isConferenceRoom)
+      if (!confRoom) return null
+      for (const spot of confRoom.activitySpots) {
+        if (spot.toolCategory === 'conference' && spot.occupiedBy === null) {
+          return spot
+        }
+      }
+      return null
+    }
+
     // Determine which room the character belongs to via their seat
     const projectName = ch.projectName || ch.folderName || ''
     const projectSeatUids = this.projectSeats.get(projectName)
@@ -477,6 +489,44 @@ export class OfficeState {
       ch.frameTimer = 0
       if (!ch.isActive) {
         ch.seatTimer = INACTIVE_SEAT_TIMER_MIN_SEC + Math.random() * INACTIVE_SEAT_TIMER_RANGE_SEC
+      }
+    }
+  }
+
+  /** Send two agents to the conference room (one is reading the other's memory) */
+  sendToConference(readerId: number, targetId: number): void {
+    for (const id of [readerId, targetId]) {
+      const ch = this.characters.get(id)
+      if (!ch) continue
+      // Release any current activity spot
+      this.releaseActivitySpot(id)
+      ch.atActivitySpot = false
+      ch.activityTarget = null
+
+      // Find a free conference spot
+      const spot = this.findActivitySpot(ch, 'conference')
+      if (!spot) continue
+
+      spot.occupiedBy = id
+      ch.activityTarget = spot
+      ch.isActive = true
+      ch.currentTool = 'conference'
+
+      const path = this.withOwnSeatUnblocked(ch, () =>
+        findPath(ch.tileCol, ch.tileRow, spot.standCol, spot.standRow, this.tileMap, this.blockedTiles)
+      )
+      if (path.length > 0) {
+        ch.path = path
+        ch.moveProgress = 0
+        ch.state = CharacterState.WALK
+        ch.frame = 0
+        ch.frameTimer = 0
+      } else {
+        ch.state = CharacterState.TYPE
+        ch.dir = spot.facingDir
+        ch.atActivitySpot = true
+        ch.frame = 0
+        ch.frameTimer = 0
       }
     }
   }

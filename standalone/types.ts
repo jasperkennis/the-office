@@ -6,6 +6,8 @@ export interface StandaloneAgentState extends BaseAgentState {
 	conversationBuffer: ConversationEntry[];
 	/** Decoded actual workspace path (best-effort from project hash) */
 	workspacePath?: string;
+	/** Linked persistent agent ID, if any */
+	persistentAgentId?: string;
 }
 
 export interface OfflineAgent {
@@ -15,4 +17,8 @@ export interface OfflineAgent {
 	workspacePath?: string;
 	palette?: number;
 	hueShift?: number;
+	/** If this is a persistent agent */
+	isPersistent?: boolean;
+	roleShort?: string;
+	roleFull?: string;
 }

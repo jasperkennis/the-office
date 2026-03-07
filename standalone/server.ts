@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import type { MessageSink } from '../src/types.js';
@@ -15,7 +16,15 @@ import { loadKnownProjects, addKnownProject } from '../src/projectStore.js';
 import { SERVER_PORT } from './constants.js';
 import { ProjectScanner, decodeProjectHash } from './projectScanner.js';
 import { StandaloneAgentManager } from './standaloneAgentManager.js';
-import { focusItermSession, launchItermSession } from './itermFocus.js';
+import { focusItermSession, launchItermSession, launchAgentSession } from './itermFocus.js';
+import {
+	loadPersistentAgents,
+	savePersistentAgents,
+	ensureAgentMemory,
+	deleteAgentData,
+	buildSystemPrompt,
+} from './agentStore.js';
+import type { PersistentAgent } from './agentStore.js';
 import type { OfflineAgent } from './types.js';
 
 // ── Paths ────────────────────────────────────────────────────
@@ -49,24 +58,26 @@ function writeJson(filePath: string, data: unknown): void {
 }
 
 // ── Offline agents ───────────────────────────────────────────
-function getOfflineAgents(agentManager: StandaloneAgentManager): OfflineAgent[] {
-	const seatsData = readJson(SEATS_FILE) ?? {};
+function getOfflineAgents(agentManager: StandaloneAgentManager, persistentAgents: PersistentAgent[]): OfflineAgent[] {
 	const liveSessionIds = agentManager.getLiveSessionIds();
 	const offline: OfflineAgent[] = [];
-	for (const [sessionId, rawMeta] of Object.entries(seatsData)) {
-		if (liveSessionIds.has(sessionId)) continue;
-		const meta = rawMeta as Record<string, unknown>;
-		// Only include sessions that have a project name (meaningful data)
-		if (!meta.projectName && !meta.name) continue;
+
+	// Add persistent agents that aren't currently running
+	for (const pa of persistentAgents) {
+		if (pa.currentSessionId && liveSessionIds.has(pa.currentSessionId)) continue;
 		offline.push({
-			sessionId,
-			name: meta.name as string | undefined,
-			projectName: meta.projectName as string | undefined,
-			workspacePath: meta.workspacePath as string | undefined,
-			palette: meta.palette as number | undefined,
-			hueShift: meta.hueShift as number | undefined,
+			sessionId: pa.id,
+			name: pa.name,
+			projectName: pa.workspacePath ? path.basename(pa.workspacePath) : undefined,
+			workspacePath: pa.workspacePath,
+			palette: pa.palette,
+			hueShift: pa.hueShift,
+			isPersistent: true,
+			roleShort: pa.roleShort,
+			roleFull: pa.roleFull,
 		});
 	}
+
 	return offline;
 }
 
@@ -99,6 +110,7 @@ async function main(): Promise<void> {
 	const assets = await preloadAssets();
 
 	const agentManager = new StandaloneAgentManager();
+	let persistentAgents = loadPersistentAgents();
 
 	// ── WebSocket broadcast sink ─────────────────────────────
 	const clients = new Set<WebSocket>();
@@ -126,20 +138,27 @@ async function main(): Promise<void> {
 		return workspacePathCache.get(projectDir) ?? undefined;
 	}
 
+	/** Find persistent agent linked to a session ID */
+	function findPersistentAgentBySession(sessionId: string): PersistentAgent | undefined {
+		return persistentAgents.find(pa => pa.currentSessionId === sessionId);
+	}
+
 	// ── Project scanner ──────────────────────────────────────
 	const scanner = new ProjectScanner({
 		onNewSession(projectDir, jsonlFile, projectName) {
 			if (!agentManager.hasSession(jsonlFile)) {
 				addKnownProject(projectName, projectDir);
 				const workspacePath = getWorkspacePath(projectDir);
-				agentManager.addSession(projectDir, jsonlFile, projectName, workspacePath);
+				const sessionId = path.basename(jsonlFile, '.jsonl');
+				const pa = findPersistentAgentBySession(sessionId);
+				agentManager.addSession(projectDir, jsonlFile, projectName, workspacePath, pa?.id);
 				broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
-				broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
+				broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 			}
 		},
 		onSessionStale(jsonlFile) {
 			agentManager.removeSession(jsonlFile);
-			broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
+			broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 		},
 	});
 	scanner.start();
@@ -214,7 +233,7 @@ async function main(): Promise<void> {
 		ws.on('message', (raw) => {
 			try {
 				const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
-				handleClientMessage(ws, msg, agentManager, assets, broadcastSink);
+				handleClientMessage(ws, msg, agentManager, assets, broadcastSink, persistentAgents, (updated) => { persistentAgents = updated; });
 			} catch {
 				// Ignore malformed messages
 			}
@@ -249,6 +268,8 @@ function handleClientMessage(
 	agentManager: StandaloneAgentManager,
 	assets: PreloadedAssets,
 	broadcastSink: MessageSink,
+	persistentAgents: PersistentAgent[],
+	setPersistentAgents: (agents: PersistentAgent[]) => void,
 ): void {
 	if (msg.type === 'webviewReady') {
 		// Send all pre-loaded assets in order
@@ -281,9 +302,32 @@ function handleClientMessage(
 		const knownProjects = loadKnownProjects();
 		ws.send(JSON.stringify({ type: 'knownProjects', projects: knownProjects }));
 
+		// Build agent meta from persistent agents (keyed by session ID for live agents)
+		const agentMeta: Record<string, Record<string, unknown>> = {};
+		const seatsData = readJson(SEATS_FILE) ?? {};
+		// Include seats.json data
+		for (const [sid, rawMeta] of Object.entries(seatsData)) {
+			agentMeta[sid] = rawMeta as Record<string, unknown>;
+		}
+		// Overlay persistent agent data for live sessions
+		for (const pa of persistentAgents) {
+			if (pa.currentSessionId) {
+				agentMeta[pa.currentSessionId] = {
+					...agentMeta[pa.currentSessionId],
+					name: pa.name,
+					palette: pa.palette,
+					hueShift: pa.hueShift,
+					seatId: pa.seatId,
+					roleShort: pa.roleShort,
+					roleFull: pa.roleFull,
+					workspacePath: pa.workspacePath,
+					persistentAgentId: pa.id,
+				};
+			}
+		}
+
 		// Send existing agents BEFORE layout (webview buffers them until layoutLoaded)
 		const agentIds = agentManager.getExistingAgentIds();
-		const agentMeta = readJson(SEATS_FILE) ?? {};
 		const folderNames: Record<number, string> = {};
 		for (const id of agentIds) {
 			const agent = agentManager.agents.get(id);
@@ -305,8 +349,8 @@ function handleClientMessage(
 		const soundEnabled = settings?.soundEnabled !== false;
 		ws.send(JSON.stringify({ type: 'settingsLoaded', soundEnabled }));
 
-		// Send offline agents
-		ws.send(JSON.stringify({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) }));
+		// Send offline agents (persistent agents that aren't running)
+		ws.send(JSON.stringify({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) }));
 
 		// Send current tool/waiting statuses to this client
 		const wsSink: MessageSink = { postMessage: (m) => ws.send(JSON.stringify(m)) };
@@ -334,6 +378,108 @@ function handleClientMessage(
 			}
 		}
 		writeJson(SEATS_FILE, seats);
+
+		// Sync persistent agent metadata from seat saves
+		let changed = false;
+		for (const agent of agentManager.agents.values()) {
+			if (!agent.persistentAgentId) continue;
+			const pa = persistentAgents.find(p => p.id === agent.persistentAgentId);
+			const seatData = seats[agent.sessionId] as Record<string, unknown> | undefined;
+			if (pa && seatData) {
+				if (seatData.palette !== undefined) pa.palette = seatData.palette as number;
+				if (seatData.hueShift !== undefined) pa.hueShift = seatData.hueShift as number;
+				if (seatData.seatId !== undefined) pa.seatId = seatData.seatId as string;
+				if (seatData.name !== undefined) pa.name = seatData.name as string;
+				if (seatData.roleShort !== undefined) pa.roleShort = seatData.roleShort as string;
+				if (seatData.roleFull !== undefined) pa.roleFull = seatData.roleFull as string;
+				changed = true;
+			}
+		}
+		if (changed) {
+			savePersistentAgents(persistentAgents);
+		}
+	} else if (msg.type === 'saveAgentIdentity') {
+		const agentData = msg.agent as { id?: string; name: string; roleShort: string; roleFull: string; workspacePath: string; palette?: number; hueShift?: number; seatId?: string; currentSessionId?: string };
+		const shouldLaunch = msg.launch as boolean | undefined;
+		const isNew = !agentData.id;
+		const agentId = agentData.id || crypto.randomUUID();
+
+		const existing = persistentAgents.find(p => p.id === agentId);
+		if (existing) {
+			existing.name = agentData.name;
+			existing.roleShort = agentData.roleShort;
+			existing.roleFull = agentData.roleFull;
+			existing.workspacePath = agentData.workspacePath;
+			if (agentData.palette !== undefined) existing.palette = agentData.palette;
+			if (agentData.hueShift !== undefined) existing.hueShift = agentData.hueShift;
+			if (agentData.seatId !== undefined) existing.seatId = agentData.seatId;
+		} else {
+			const newAgent: PersistentAgent = {
+				id: agentId,
+				name: agentData.name,
+				roleShort: agentData.roleShort,
+				roleFull: agentData.roleFull,
+				workspacePath: agentData.workspacePath,
+				palette: agentData.palette,
+				hueShift: agentData.hueShift,
+				seatId: agentData.seatId,
+				currentSessionId: agentData.currentSessionId,
+			};
+			persistentAgents.push(newAgent);
+		}
+
+		ensureAgentMemory(agentId);
+		savePersistentAgents(persistentAgents);
+		setPersistentAgents(persistentAgents);
+		console.log(`[Standalone] ${isNew ? 'Created' : 'Updated'} persistent agent: ${agentData.name} (${agentId})`);
+
+		// Broadcast updated offline agents
+		broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
+		// Send back the saved agent ID so the webview can link it
+		broadcastSink.postMessage({ type: 'agentIdentitySaved', agentId, agent: persistentAgents.find(p => p.id === agentId) });
+
+		// Launch immediately if requested (new worker flow)
+		if (shouldLaunch) {
+			const pa = persistentAgents.find(p => p.id === agentId)!;
+			const newSessionId = crypto.randomUUID();
+			pa.currentSessionId = newSessionId;
+			savePersistentAgents(persistentAgents);
+			const prompt = buildSystemPrompt(pa);
+			const cwd = pa.workspacePath || os.homedir();
+			console.log(`[Standalone] Launching new agent "${pa.name}" with session ${newSessionId} in ${cwd}`);
+			const launched = launchAgentSession(newSessionId, cwd, prompt);
+			if (!launched) {
+				console.log(`[Standalone] Failed to launch agent session for ${pa.name}`);
+			}
+		}
+	} else if (msg.type === 'deleteAgentIdentity') {
+		const agentId = msg.agentId as string;
+		console.log(`[Standalone] Deleting persistent agent ${agentId}`);
+		const updated = persistentAgents.filter(p => p.id !== agentId);
+		savePersistentAgents(updated);
+		setPersistentAgents(updated);
+		deleteAgentData(agentId);
+		broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, updated) });
+	} else if (msg.type === 'launchAgent') {
+		const agentId = msg.agentId as string;
+		const pa = persistentAgents.find(p => p.id === agentId);
+		if (!pa) {
+			console.log(`[Standalone] Persistent agent ${agentId} not found`);
+			return;
+		}
+
+		const newSessionId = crypto.randomUUID();
+		pa.currentSessionId = newSessionId;
+		savePersistentAgents(persistentAgents);
+		ensureAgentMemory(agentId);
+
+		const prompt = buildSystemPrompt(pa);
+		const cwd = pa.workspacePath || os.homedir();
+		console.log(`[Standalone] Launching agent "${pa.name}" with session ${newSessionId} in ${cwd}`);
+		const launched = launchAgentSession(newSessionId, cwd, prompt);
+		if (!launched) {
+			console.log(`[Standalone] Failed to launch agent session for ${pa.name}`);
+		}
 	} else if (msg.type === 'restartAgent') {
 		const sessionId = msg.sessionId as string;
 		const workspacePath = msg.workspacePath as string | undefined;
@@ -350,8 +496,7 @@ function handleClientMessage(
 			delete seats[sessionId];
 			writeJson(SEATS_FILE, seats);
 		}
-		// Broadcast updated offline agents list
-		broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
+		broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 	} else if (msg.type === 'setSoundEnabled') {
 		writeJson(SETTINGS_FILE, { soundEnabled: msg.enabled });
 	} else if (msg.type === 'openClaude' || msg.type === 'closeAgent' || msg.type === 'openSessionsFolder') {
