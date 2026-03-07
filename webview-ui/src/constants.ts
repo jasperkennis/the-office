@@ -90,14 +90,15 @@ export const DEFAULT_NEUTRAL_COLOR: FloorColor = { h: 0, s: 0, b: 0, c: 0 }
 
 // ── Room Generation ─────────────────────────────────────────
 export const ROOM_HEIGHT = 7
-export const ROOM_LABEL_ROWS = 1
+export const ROOM_LABEL_ROWS = 2
 export const ROOM_GAP_COLS = 2
 export const ROOM_MIN_SEATS = 4
 export const ROOM_EXTRA_SEATS = 2
 export const ROOM_MIN_INTERIOR_WIDTH = 6
 export const ROOM_FLOOR_COLOR: FloorColor = { h: 35, s: 30, b: 15, c: 0 }
-export const ROOM_LABEL_FONT_SIZE_PX = 7
-export const ROOM_LABEL_COLOR = 'rgba(255, 255, 255, 0.65)'
+export const ROOM_LABEL_FONT_SIZE_PX = 10
+export const ROOM_LABEL_COLOR = '#ffffff'
+export const ROOM_LABEL_SHADOW_COLOR = 'rgba(0, 0, 0, 0.5)'
 
 // ── Character Names ─────────────────────────────────────────
 export const NAME_VERTICAL_OFFSET_PX = 27

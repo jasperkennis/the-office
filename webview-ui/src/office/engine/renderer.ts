@@ -22,6 +22,7 @@ import {
   SEAT_BUSY_COLOR,
   ROOM_LABEL_FONT_SIZE_PX,
   ROOM_LABEL_COLOR,
+  ROOM_LABEL_SHADOW_COLOR,
   NAME_VERTICAL_OFFSET_PX,
   NAME_FONT_SIZE_PX,
   NAME_COLOR,
@@ -297,13 +298,19 @@ export function renderProjectLabels(
   ctx.save()
   const fontSize = ROOM_LABEL_FONT_SIZE_PX * zoom
   ctx.font = `${fontSize}px "FS Pixel Sans", monospace`
-  ctx.fillStyle = ROOM_LABEL_COLOR
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
 
   for (const room of rooms) {
     const centerX = offsetX + (room.col + room.width / 2) * TILE_SIZE * zoom
-    const labelY = offsetY + room.row * TILE_SIZE * zoom - 2 * zoom
+    // Position above the wall's 3D face (walls extend TILE_SIZE above their tile)
+    const labelY = offsetY + (room.row - 1) * TILE_SIZE * zoom - 2 * zoom
+
+    // Shadow for contrast
+    ctx.fillStyle = ROOM_LABEL_SHADOW_COLOR
+    ctx.fillText(room.projectName, centerX + zoom, labelY + zoom)
+
+    ctx.fillStyle = ROOM_LABEL_COLOR
     ctx.fillText(room.projectName, centerX, labelY)
   }
   ctx.restore()

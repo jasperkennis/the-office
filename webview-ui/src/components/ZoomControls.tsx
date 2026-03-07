@@ -6,10 +6,13 @@ import {
   ZOOM_LEVEL_HIDE_DELAY_MS,
   ZOOM_LEVEL_FADE_DURATION_SEC,
 } from '../constants.js'
+import { SettingsModal } from './SettingsModal.js'
 
 interface ZoomControlsProps {
   zoom: number
   onZoomChange: (zoom: number) => void
+  isDebugMode: boolean
+  onToggleDebugMode: () => void
 }
 
 const btnBase: React.CSSProperties = {
@@ -27,8 +30,9 @@ const btnBase: React.CSSProperties = {
   boxShadow: 'var(--pixel-shadow)',
 }
 
-export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
-  const [hovered, setHovered] = useState<'minus' | 'plus' | null>(null)
+export function ZoomControls({ zoom, onZoomChange, isDebugMode, onToggleDebugMode }: ZoomControlsProps) {
+  const [hovered, setHovered] = useState<'minus' | 'plus' | 'settings' | null>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [showLevel, setShowLevel] = useState(false)
   const [fadeOut, setFadeOut] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -142,6 +146,34 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
             <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setIsSettingsOpen((v) => !v)}
+            onMouseEnter={() => setHovered('settings')}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              ...btnBase,
+              background: isSettingsOpen
+                ? 'var(--pixel-active-bg)'
+                : hovered === 'settings'
+                  ? 'var(--pixel-btn-hover-bg)'
+                  : btnBase.background,
+              border: isSettingsOpen ? '2px solid var(--pixel-accent)' : btnBase.border,
+            }}
+            title="Settings"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.1 3.1l1.4 1.4M13.5 13.5l1.4 1.4M3.1 14.9l1.4-1.4M13.5 4.5l1.4-1.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            isDebugMode={isDebugMode}
+            onToggleDebugMode={onToggleDebugMode}
+          />
+        </div>
       </div>
     </>
   )

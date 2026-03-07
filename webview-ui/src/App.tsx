@@ -84,7 +84,7 @@ function App() {
         panRef={panRef}
       />
 
-      <ZoomControls zoom={zoom} onZoomChange={setZoom} />
+      <ZoomControls zoom={zoom} onZoomChange={setZoom} isDebugMode={isDebugMode} onToggleDebugMode={handleToggleDebugMode} />
 
       {/* Vignette overlay */}
       <div
@@ -105,8 +105,6 @@ function App() {
 
       <BottomToolbar
         onOpenClaude={handleOpenClaude}
-        isDebugMode={isDebugMode}
-        onToggleDebugMode={handleToggleDebugMode}
         workspaceFolders={workspaceFolders}
       />
 

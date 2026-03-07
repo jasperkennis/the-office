@@ -1,32 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { SettingsModal } from './SettingsModal.js'
 import type { WorkspaceFolder } from '../hooks/useExtensionMessages.js'
 import { vscode, isStandalone } from '../vscodeApi.js'
 
 interface BottomToolbarProps {
   onOpenClaude: () => void
-  isDebugMode: boolean
-  onToggleDebugMode: () => void
   workspaceFolders: WorkspaceFolder[]
 }
 
-const panelStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 10,
-  left: 10,
-  zIndex: 'var(--pixel-controls-z)',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
-  background: 'var(--pixel-bg)',
-  border: '2px solid var(--pixel-border)',
-  borderRadius: 0,
-  padding: '4px 6px',
-  boxShadow: 'var(--pixel-shadow)',
-}
-
 const btnBase: React.CSSProperties = {
-  padding: '5px 10px',
+  padding: '5px 12px',
   fontSize: '24px',
   color: 'var(--pixel-text)',
   background: 'var(--pixel-btn-bg)',
@@ -35,21 +17,11 @@ const btnBase: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-const btnActive: React.CSSProperties = {
-  ...btnBase,
-  background: 'var(--pixel-active-bg)',
-  border: '2px solid var(--pixel-accent)',
-}
-
-
 export function BottomToolbar({
   onOpenClaude,
-  isDebugMode,
-  onToggleDebugMode,
   workspaceFolders,
 }: BottomToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false)
   const [hoveredFolder, setHoveredFolder] = useState<number | null>(null)
   const folderPickerRef = useRef<HTMLDivElement>(null)
@@ -81,19 +53,34 @@ export function BottomToolbar({
     vscode.postMessage({ type: 'openClaude', folderPath: folder.path })
   }
 
+  if (isStandalone) {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 6,
+          left: 8,
+          zIndex: 'var(--pixel-controls-z)',
+          fontSize: '18px',
+          color: 'var(--pixel-text-dim)',
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}
+      >
+        Watching...
+      </div>
+    )
+  }
+
   return (
-    <div style={panelStyle}>
-      {isStandalone ? (
-        <span
-          style={{
-            padding: '5px 12px',
-            fontSize: '24px',
-            color: 'var(--pixel-text-dim)',
-          }}
-        >
-          Watching...
-        </span>
-      ) : (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 10,
+        left: 10,
+        zIndex: 'var(--pixel-controls-z)',
+      }}
+    >
       <div ref={folderPickerRef} style={{ position: 'relative' }}>
         <button
           onClick={handleAgentClick}
@@ -101,13 +88,13 @@ export function BottomToolbar({
           onMouseLeave={() => setHovered(null)}
           style={{
             ...btnBase,
-            padding: '5px 12px',
             background:
               hovered === 'agent' || isFolderPickerOpen
                 ? 'var(--pixel-agent-hover-bg)'
                 : 'var(--pixel-agent-bg)',
             border: '2px solid var(--pixel-agent-border)',
             color: 'var(--pixel-agent-text)',
+            boxShadow: 'var(--pixel-shadow)',
           }}
         >
           + Agent
@@ -152,31 +139,6 @@ export function BottomToolbar({
             ))}
           </div>
         )}
-      </div>
-      )}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setIsSettingsOpen((v) => !v)}
-          onMouseEnter={() => setHovered('settings')}
-          onMouseLeave={() => setHovered(null)}
-          style={
-            isSettingsOpen
-              ? { ...btnActive }
-              : {
-                  ...btnBase,
-                  background: hovered === 'settings' ? 'var(--pixel-btn-hover-bg)' : btnBase.background,
-                }
-          }
-          title="Settings"
-        >
-          Settings
-        </button>
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          isDebugMode={isDebugMode}
-          onToggleDebugMode={onToggleDebugMode}
-        />
       </div>
     </div>
   )
