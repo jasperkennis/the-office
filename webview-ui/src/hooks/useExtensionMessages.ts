@@ -45,6 +45,15 @@ export interface KnownProject {
   workspacePath: string
 }
 
+export interface OfflineAgent {
+  sessionId: string
+  name?: string
+  projectName?: string
+  workspacePath?: string
+  palette?: number
+  hueShift?: number
+}
+
 export interface ExtensionMessageState {
   agents: number[]
   selectedAgent: number | null
@@ -57,6 +66,7 @@ export interface ExtensionMessageState {
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
   workspaceFolders: WorkspaceFolder[]
   agentConversation: Record<number, ConversationEntry[]>
+  offlineAgents: OfflineAgent[]
 }
 
 export function useExtensionMessages(
@@ -72,6 +82,7 @@ export function useExtensionMessages(
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
   const [workspaceFolders, setWorkspaceFolders] = useState<WorkspaceFolder[]>([])
   const [agentConversation, setAgentConversation] = useState<Record<number, ConversationEntry[]>>({})
+  const [offlineAgents, setOfflineAgents] = useState<OfflineAgent[]>([])
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
@@ -103,7 +114,9 @@ export function useExtensionMessages(
       const msg = e.data
       const os = getOfficeState()
 
-      if (msg.type === 'knownProjects') {
+      if (msg.type === 'offlineAgents') {
+        setOfflineAgents(msg.agents as OfflineAgent[])
+      } else if (msg.type === 'knownProjects') {
         knownProjectsRef.current = msg.projects as KnownProject[]
       } else if (msg.type === 'layoutLoaded') {
         // Generate room layout from known projects and buffered agents
@@ -397,5 +410,5 @@ export function useExtensionMessages(
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, selectedAgent, selectAgent: setSelectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, agentConversation }
+  return { agents, selectedAgent, selectAgent: setSelectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, agentConversation, offlineAgents }
 }

@@ -65,7 +65,7 @@ export class StandaloneAgentManager {
 		return this.fileToAgent.has(jsonlFile);
 	}
 
-	addSession(projectDir: string, jsonlFile: string, projectName: string): void {
+	addSession(projectDir: string, jsonlFile: string, projectName: string, workspacePath?: string): void {
 		if (this.fileToAgent.has(jsonlFile)) return;
 
 		const sessionId = path.basename(jsonlFile, '.jsonl');
@@ -89,6 +89,7 @@ export class StandaloneAgentManager {
 			sessionId,
 			projectName,
 			conversationBuffer: [],
+			workspacePath,
 		};
 
 		this.agents.set(id, agent);
@@ -189,6 +190,15 @@ export class StandaloneAgentManager {
 	getSessionIdForAgent(agentId: number): string | null {
 		const agent = this.agents.get(agentId);
 		return agent?.sessionId ?? null;
+	}
+
+	/** Get all live session IDs */
+	getLiveSessionIds(): Set<string> {
+		const ids = new Set<string>();
+		for (const agent of this.agents.values()) {
+			ids.add(agent.sessionId);
+		}
+		return ids;
 	}
 
 	/** Send current tool/status state to the sink (for newly connected clients) */

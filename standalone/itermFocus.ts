@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 /**
  * Attempt to focus the iTerm2 tab running the Claude session with the given session ID.
@@ -45,6 +45,48 @@ function findTtyForSession(sessionId: string): string | null {
 		return null;
 	} catch {
 		return null;
+	}
+}
+
+/**
+ * Launch a new iTerm2 tab and run `claude --session-id <sessionId>` in the given directory.
+ */
+export function launchItermSession(sessionId: string, cwd?: string): boolean {
+	try {
+		const script = `
+on run argv
+	set sid to item 1 of argv
+	set cwd to item 2 of argv
+	set cmd to ""
+	if cwd is not "" then
+		set cmd to "cd " & quoted form of cwd & " && "
+	end if
+	set cmd to cmd & "claude --session-id " & sid
+	tell application "iTerm2"
+		activate
+		if (count of windows) = 0 then
+			create window with default profile
+			tell current session of current window
+				write text cmd
+			end tell
+		else
+			tell current window
+				set newTab to (create tab with default profile)
+				tell current session of newTab
+					write text cmd
+				end tell
+			end tell
+		end if
+	end tell
+end run`;
+		execFileSync('osascript', ['-e', script, '--', sessionId, cwd || ''], {
+			encoding: 'utf-8',
+			timeout: 5000,
+		});
+		return true;
+	} catch (err) {
+		console.log(`[iTerm Launch] Error: ${err}`);
+		return false;
 	}
 }
 

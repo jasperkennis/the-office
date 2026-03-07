@@ -26,7 +26,7 @@ function defaultZoom(): number {
 }
 
 function App() {
-  const { agents, selectedAgent, selectAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, workspaceFolders, agentConversation } = useExtensionMessages(getOfficeState)
+  const { agents, selectedAgent, selectAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, workspaceFolders, agentConversation, offlineAgents } = useExtensionMessages(getOfficeState)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [zoom, setZoom] = useState(defaultZoom)
@@ -128,6 +128,7 @@ function App() {
         onSelectAgent={selectAgent}
         agentTools={agentTools}
         agentStatuses={agentStatuses}
+        offlineAgents={offlineAgents}
       />
 
       {isDebugMode && (

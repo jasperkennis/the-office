@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ToolActivity } from '../office/types.js'
 import type { OfficeState } from '../office/engine/officeState.js'
+import type { OfflineAgent } from '../hooks/useExtensionMessages.js'
 import { vscode } from '../vscodeApi.js'
 
 interface AgentSidebarProps {
@@ -10,6 +11,7 @@ interface AgentSidebarProps {
   onSelectAgent: (id: number | null) => void
   agentTools: Record<number, ToolActivity[]>
   agentStatuses: Record<number, string>
+  offlineAgents: OfflineAgent[]
 }
 
 /** Derive a short activity label from current tools */
@@ -81,6 +83,21 @@ function groupByRoom(agents: number[], officeState: OfficeState): Map<string, nu
   return groups
 }
 
+/** Group offline agents by project name */
+function groupOfflineByProject(offlineAgents: OfflineAgent[]): Map<string, OfflineAgent[]> {
+  const groups = new Map<string, OfflineAgent[]>()
+  for (const agent of offlineAgents) {
+    const project = agent.projectName || 'Unknown'
+    let list = groups.get(project)
+    if (!list) {
+      list = []
+      groups.set(project, list)
+    }
+    list.push(agent)
+  }
+  return groups
+}
+
 export function AgentSidebar({
   officeState,
   agents,
@@ -88,11 +105,14 @@ export function AgentSidebar({
   onSelectAgent,
   agentTools,
   agentStatuses,
+  offlineAgents,
 }: AgentSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const [hoveredOffline, setHoveredOffline] = useState<string | null>(null)
+  const [offlineCollapsed, setOfflineCollapsed] = useState(true)
 
-  if (agents.length === 0) return null
+  if (agents.length === 0 && offlineAgents.length === 0) return null
 
   const handleClick = (id: number) => {
     officeState.selectedAgentId = id
@@ -246,6 +266,116 @@ export function AgentSidebar({
             )
           })}
         </div>
+      )}
+
+      {/* Offline agents section */}
+      {offlineAgents.length > 0 && (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px 6px',
+              borderTop: '2px solid var(--pixel-border)',
+              cursor: 'pointer',
+            }}
+            onClick={() => setOfflineCollapsed((p) => !p)}
+          >
+            <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)', userSelect: 'none' }}>
+              Offline ({offlineAgents.length})
+            </span>
+            <span style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', userSelect: 'none', marginLeft: 6 }}>
+              {offlineCollapsed ? '\u25B6' : '\u25BC'}
+            </span>
+          </div>
+
+          {!offlineCollapsed && (
+            <div style={{ overflowY: 'auto', overflowX: 'hidden' }}>
+              {[...groupOfflineByProject(offlineAgents).entries()].map(([projectName, offAgents]) => (
+                <div key={`offline-${projectName}`}>
+                  <div
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: '16px',
+                      color: 'var(--pixel-text-dim)',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderBottom: '1px solid var(--pixel-border)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {projectName}
+                  </div>
+                  {offAgents.map((agent) => (
+                    <div
+                      key={agent.sessionId}
+                      onMouseEnter={() => setHoveredOffline(agent.sessionId)}
+                      onMouseLeave={() => setHoveredOffline(null)}
+                      style={{
+                        padding: '4px 6px',
+                        background: hoveredOffline === agent.sessionId ? 'var(--pixel-btn-hover-bg)' : 'transparent',
+                        borderBottom: '1px solid var(--pixel-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: 'rgba(255,255,255,0.1)',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: '20px',
+                            color: 'var(--pixel-text-dim)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {agent.name || agent.sessionId.slice(0, 8)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          vscode.postMessage({
+                            type: 'restartAgent',
+                            sessionId: agent.sessionId,
+                            workspacePath: agent.workspacePath,
+                          })
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: '16px',
+                          color: 'var(--pixel-agent-text)',
+                          background: 'var(--pixel-agent-bg)',
+                          border: '2px solid var(--pixel-agent-border)',
+                          borderRadius: 0,
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                        title="Resume this session in iTerm"
+                      >
+                        Resume
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

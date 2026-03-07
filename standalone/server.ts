@@ -13,9 +13,10 @@ import {
 } from '../src/assetLoader.js';
 import { loadKnownProjects, addKnownProject } from '../src/projectStore.js';
 import { SERVER_PORT } from './constants.js';
-import { ProjectScanner } from './projectScanner.js';
+import { ProjectScanner, decodeProjectHash } from './projectScanner.js';
 import { StandaloneAgentManager } from './standaloneAgentManager.js';
-import { focusItermSession } from './itermFocus.js';
+import { focusItermSession, launchItermSession } from './itermFocus.js';
+import type { OfflineAgent } from './types.js';
 
 // ── Paths ────────────────────────────────────────────────────
 const SETTINGS_DIR = path.join(os.homedir(), '.pixel-agents');
@@ -45,6 +46,28 @@ function writeJson(filePath: string, data: unknown): void {
 	} catch (err) {
 		console.error(`[Standalone] Failed to write ${filePath}:`, err);
 	}
+}
+
+// ── Offline agents ───────────────────────────────────────────
+function getOfflineAgents(agentManager: StandaloneAgentManager): OfflineAgent[] {
+	const seatsData = readJson(SEATS_FILE) ?? {};
+	const liveSessionIds = agentManager.getLiveSessionIds();
+	const offline: OfflineAgent[] = [];
+	for (const [sessionId, rawMeta] of Object.entries(seatsData)) {
+		if (liveSessionIds.has(sessionId)) continue;
+		const meta = rawMeta as Record<string, unknown>;
+		// Only include sessions that have a project name (meaningful data)
+		if (!meta.projectName && !meta.name) continue;
+		offline.push({
+			sessionId,
+			name: meta.name as string | undefined,
+			projectName: meta.projectName as string | undefined,
+			workspacePath: meta.workspacePath as string | undefined,
+			palette: meta.palette as number | undefined,
+			hueShift: meta.hueShift as number | undefined,
+		});
+	}
+	return offline;
 }
 
 // ── Pre-load assets ──────────────────────────────────────────
@@ -93,17 +116,30 @@ async function main(): Promise<void> {
 
 	agentManager.setSink(broadcastSink);
 
+	// ── Workspace path cache (decoded from project hash) ────
+	const workspacePathCache = new Map<string, string | null>();
+	function getWorkspacePath(projectDir: string): string | undefined {
+		if (!workspacePathCache.has(projectDir)) {
+			const dirName = path.basename(projectDir);
+			workspacePathCache.set(projectDir, decodeProjectHash(dirName));
+		}
+		return workspacePathCache.get(projectDir) ?? undefined;
+	}
+
 	// ── Project scanner ──────────────────────────────────────
 	const scanner = new ProjectScanner({
 		onNewSession(projectDir, jsonlFile, projectName) {
 			if (!agentManager.hasSession(jsonlFile)) {
 				addKnownProject(projectName, projectDir);
-				agentManager.addSession(projectDir, jsonlFile, projectName);
+				const workspacePath = getWorkspacePath(projectDir);
+				agentManager.addSession(projectDir, jsonlFile, projectName, workspacePath);
 				broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
+				broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
 			}
 		},
 		onSessionStale(jsonlFile) {
 			agentManager.removeSession(jsonlFile);
+			broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) });
 		},
 	});
 	scanner.start();
@@ -269,6 +305,9 @@ function handleClientMessage(
 		const soundEnabled = settings?.soundEnabled !== false;
 		ws.send(JSON.stringify({ type: 'settingsLoaded', soundEnabled }));
 
+		// Send offline agents
+		ws.send(JSON.stringify({ type: 'offlineAgents', agents: getOfflineAgents(agentManager) }));
+
 		// Send current tool/waiting statuses to this client
 		const wsSink: MessageSink = { postMessage: (m) => ws.send(JSON.stringify(m)) };
 		agentManager.sendAgentStatuses(wsSink);
@@ -282,7 +321,27 @@ function handleClientMessage(
 			}
 		}
 	} else if (msg.type === 'saveAgentSeats') {
-		writeJson(SEATS_FILE, msg.seats);
+		const seats = msg.seats as Record<string, Record<string, unknown>>;
+		// Enrich with project info from live agents
+		for (const agent of agentManager.agents.values()) {
+			const entry = seats[agent.sessionId];
+			if (entry) {
+				entry.projectDir = agent.projectDir;
+				entry.projectName = agent.projectName;
+				if (agent.workspacePath) {
+					entry.workspacePath = agent.workspacePath;
+				}
+			}
+		}
+		writeJson(SEATS_FILE, seats);
+	} else if (msg.type === 'restartAgent') {
+		const sessionId = msg.sessionId as string;
+		const workspacePath = msg.workspacePath as string | undefined;
+		console.log(`[Standalone] Restarting session ${sessionId} in ${workspacePath || '~'}`);
+		const launched = launchItermSession(sessionId, workspacePath);
+		if (!launched) {
+			console.log(`[Standalone] Failed to launch iTerm session for ${sessionId}`);
+		}
 	} else if (msg.type === 'setSoundEnabled') {
 		writeJson(SETTINGS_FILE, { soundEnabled: msg.enabled });
 	} else if (msg.type === 'openClaude' || msg.type === 'closeAgent' || msg.type === 'openSessionsFolder') {

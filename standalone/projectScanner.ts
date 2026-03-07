@@ -37,6 +37,42 @@ function getLiveSessionIds(): Set<string> {
 	return ids;
 }
 
+/**
+ * Try to reconstruct the actual workspace path from a project hash directory name.
+ * Hash format: workspace path with `/`, `\`, `:` replaced by `-`.
+ * Uses filesystem probing to resolve ambiguous hyphens.
+ */
+export function decodeProjectHash(hash: string): string | null {
+	// On macOS/Linux, paths start with '/', encoded as leading '-'
+	if (!hash.startsWith('-')) return null;
+
+	const segments = hash.slice(1).split('-');
+
+	function resolve(idx: number, current: string): string | null {
+		if (idx >= segments.length) {
+			try {
+				if (fs.statSync(current).isDirectory()) return current;
+			} catch { /* ignore */ }
+			return null;
+		}
+		// Try consuming 1 to remaining segments (shortest first — most common case)
+		for (let len = 1; len <= segments.length - idx; len++) {
+			const part = segments.slice(idx, idx + len).join('-');
+			const next = current + '/' + part;
+			try {
+				if (fs.statSync(next).isDirectory()) {
+					if (idx + len === segments.length) return next;
+					const result = resolve(idx + len, next);
+					if (result) return result;
+				}
+			} catch { /* path doesn't exist */ }
+		}
+		return null;
+	}
+
+	return resolve(0, '');
+}
+
 export class ProjectScanner {
 	private projectsRoot: string;
 	private projects = new Map<string, WatchedProject>();
