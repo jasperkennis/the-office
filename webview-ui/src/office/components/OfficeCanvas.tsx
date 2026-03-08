@@ -4,7 +4,7 @@ import type { SelectionRenderState } from '../engine/renderer.js'
 import { startGameLoop } from '../engine/gameLoop.js'
 import { renderFrame } from '../engine/renderer.js'
 import { TILE_SIZE } from '../types.js'
-import { CAMERA_FOLLOW_LERP, CAMERA_FOLLOW_SNAP_THRESHOLD, ZOOM_MIN, ZOOM_MAX, ZOOM_SCROLL_THRESHOLD, PAN_MARGIN_FRACTION } from '../../constants.js'
+import { CAMERA_FOLLOW_LERP, CAMERA_FOLLOW_SNAP_THRESHOLD, ZOOM_MIN, ZOOM_MAX, ZOOM_SCROLL_THRESHOLD, PAN_MARGIN_FRACTION, KEY_PAN_SPEED } from '../../constants.js'
 import { unlockAudio } from '../../notificationSound.js'
 
 interface OfficeCanvasProps {
@@ -19,11 +19,14 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const offsetRef = useRef({ x: 0, y: 0 })
-  // Middle-mouse pan state (imperative, no re-renders)
+  // Pan state (imperative, no re-renders) — works for both middle-mouse and left-click drag
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 })
+  const didDragRef = useRef(false)
   // Zoom scroll accumulator for trackpad pinch sensitivity
   const zoomAccumulatorRef = useRef(0)
+  // Arrow key pan state
+  const keysDownRef = useRef(new Set<string>())
 
   // Clamp pan so the map edge can't go past a margin inside the viewport
   const clampPan = useCallback((px: number, py: number): { x: number; y: number } => {
@@ -164,11 +167,20 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      // Handle middle-mouse panning
+      // Handle drag-to-pan (middle-mouse or left-click drag)
       if (isPanningRef.current) {
         const dpr = window.devicePixelRatio || 1
         const dx = (e.clientX - panStartRef.current.mouseX) * dpr
         const dy = (e.clientY - panStartRef.current.mouseY) * dpr
+        // Only start panning after a small drag threshold to avoid interfering with clicks
+        if (!didDragRef.current) {
+          const dist = Math.abs(e.clientX - panStartRef.current.mouseX) + Math.abs(e.clientY - panStartRef.current.mouseY)
+          if (dist < 4) return
+          didDragRef.current = true
+          officeState.cameraFollowId = null
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = 'grabbing'
+        }
         panRef.current = clampPan(
           panStartRef.current.panX + dx,
           panStartRef.current.panY + dy,
@@ -208,19 +220,22 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       unlockAudio()
-      // Middle mouse button starts panning
-      if (e.button === 1) {
-        e.preventDefault()
-        officeState.cameraFollowId = null
+      // Middle mouse or left mouse button starts panning
+      if (e.button === 1 || e.button === 0) {
+        if (e.button === 1) e.preventDefault()
         isPanningRef.current = true
+        didDragRef.current = false
         panStartRef.current = {
           mouseX: e.clientX,
           mouseY: e.clientY,
           panX: panRef.current.x,
           panY: panRef.current.y,
         }
-        const canvas = canvasRef.current
-        if (canvas) canvas.style.cursor = 'grabbing'
+        if (e.button === 1) {
+          officeState.cameraFollowId = null
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = 'grabbing'
+        }
         return
       }
     },
@@ -229,10 +244,12 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button === 1) {
+      if (e.button === 1 || e.button === 0) {
+        if (isPanningRef.current && didDragRef.current) {
+          const canvas = canvasRef.current
+          if (canvas) canvas.style.cursor = 'default'
+        }
         isPanningRef.current = false
-        const canvas = canvasRef.current
-        if (canvas) canvas.style.cursor = 'default'
         return
       }
     },
@@ -241,6 +258,9 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
+      // Skip click if we just dragged to pan
+      if (didDragRef.current) return
+
       const pos = screenToWorld(e.clientX, e.clientY)
       if (!pos) return
 
@@ -292,6 +312,7 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
 
   const handleMouseLeave = useCallback(() => {
     isPanningRef.current = false
+    didDragRef.current = false
     officeState.hoveredAgentId = null
     officeState.hoveredTile = null
   }, [officeState])
@@ -337,15 +358,56 @@ export function OfficeCanvas({ officeState, onClick, zoom, onZoomChange, panRef 
     if (e.button === 1) e.preventDefault()
   }, [])
 
+  // Arrow key panning
+  useEffect(() => {
+    const keys = keysDownRef.current
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        keys.add(e.key)
+      }
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keys.delete(e.key)
+    }
+    let animId: number
+    const tick = () => {
+      if (keys.size > 0) {
+        let dx = 0
+        let dy = 0
+        if (keys.has('ArrowLeft')) dx += KEY_PAN_SPEED
+        if (keys.has('ArrowRight')) dx -= KEY_PAN_SPEED
+        if (keys.has('ArrowUp')) dy += KEY_PAN_SPEED
+        if (keys.has('ArrowDown')) dy -= KEY_PAN_SPEED
+        if (dx !== 0 || dy !== 0) {
+          officeState.cameraFollowId = null
+          panRef.current = clampPan(panRef.current.x + dx, panRef.current.y + dy)
+        }
+      }
+      animId = requestAnimationFrame(tick)
+    }
+    animId = requestAnimationFrame(tick)
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      keys.clear()
+    }
+  }, [officeState, panRef, clampPan])
+
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
       style={{
         width: '100%',
         height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: '#1E1E2E',
+        outline: 'none',
       }}
     >
       <canvas

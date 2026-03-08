@@ -4,6 +4,7 @@ import {
   ROOM_HEIGHT,
   ROOM_LABEL_ROWS,
   ROOM_GAP_COLS,
+  ROOM_GAP_ROWS,
   ROOM_MIN_SEATS,
   ROOM_EXTRA_SEATS,
   ROOM_MIN_INTERIOR_WIDTH,
@@ -73,10 +74,13 @@ export function generateRoomLayout(
   const warehouseInteriorWidth = Math.max(WAREHOUSE_MIN_WIDTH - 2, 2 + crateCols)
   const warehouseWidth = warehouseInteriorWidth + 2
 
-  // Total layout dimensions (project rooms + gap + conference room + gap + warehouse)
-  const totalRows = ROOM_LABEL_ROWS + ROOM_HEIGHT
+  // Layout dimensions: project rooms on row 1, special rooms on row 2
+  const row1Height = ROOM_LABEL_ROWS + ROOM_HEIGHT
+  const row2Height = ROOM_LABEL_ROWS + ROOM_HEIGHT
+  const totalRows = row1Height + ROOM_GAP_ROWS + row2Height
   const projectColsTotal = roomSpecs.reduce((sum, r) => sum + r.roomWidth, 0) + ROOM_GAP_COLS * (roomSpecs.length - 1)
-  const totalCols = projectColsTotal + ROOM_GAP_COLS + CONFERENCE_ROOM_WIDTH + ROOM_GAP_COLS + warehouseWidth
+  const specialColsTotal = CONFERENCE_ROOM_WIDTH + ROOM_GAP_COLS + warehouseWidth
+  const totalCols = Math.max(projectColsTotal, specialColsTotal)
 
   // Initialize tiles with VOID
   const tiles: TileTypeVal[] = new Array(totalRows * totalCols).fill(TileType.VOID)
@@ -253,9 +257,9 @@ export function generateRoomLayout(
   }
 
   // ── Conference Room ──────────────────────────────────────────
-  // Shared room at the end, agents go here when reading each other's transcripts
-  const confCol = colOffset
-  const confRow = ROOM_LABEL_ROWS
+  // Shared room on second row, below project rooms
+  const confCol = 0
+  const confRow = row1Height + ROOM_GAP_ROWS + ROOM_LABEL_ROWS
   const confWidth = CONFERENCE_ROOM_WIDTH
 
   // Fill conference room tiles
@@ -356,7 +360,7 @@ export function generateRoomLayout(
   // ── Warehouse ─────────────────────────────────────────────────
   // One crate per agent — The Office-style storage for agent memory
   const whCol = confCol + confWidth + ROOM_GAP_COLS
-  const whRow = ROOM_LABEL_ROWS
+  const whRow = row1Height + ROOM_GAP_ROWS + ROOM_LABEL_ROWS
 
   // Fill warehouse tiles
   for (let r = 0; r < ROOM_HEIGHT; r++) {
