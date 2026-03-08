@@ -17,6 +17,18 @@ interface AgentSidebarProps {
   onForgetAgent: (sessionId: string) => void
 }
 
+/** Format an ISO timestamp as a relative "time ago" string */
+function timeAgo(isoDate: string): string {
+  const seconds = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 /** Derive a short activity label from current tools */
 function getActivity(
   agentId: number,
@@ -408,6 +420,8 @@ export function AgentSidebar({
   const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
   const [confirmRoomDelete, setConfirmRoomDelete] = useState<{ name: string } | null>(null)
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
+  const [callInAgent, setCallInAgent] = useState<OfflineAgent | null>(null)
+  const [callInTask, setCallInTask] = useState('')
 
   const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
 
@@ -449,6 +463,101 @@ export function AgentSidebar({
           }}
           onCancel={() => setConfirmRoomDelete(null)}
         />
+      )}
+      {callInAgent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10001,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+          onClick={() => setCallInAgent(null)}
+        >
+          <div
+            style={{
+              background: 'var(--pixel-bg)',
+              border: '2px solid var(--pixel-border)',
+              borderRadius: 0,
+              boxShadow: 'var(--pixel-shadow)',
+              padding: '12px',
+              minWidth: 280,
+              maxWidth: 360,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontSize: '22px', color: 'var(--pixel-text)', fontWeight: 'bold' }}>
+              Call In {callInAgent.name || callInAgent.sessionId.slice(0, 8)}
+            </span>
+            <div>
+              <div style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', marginBottom: 2 }}>
+                What should they work on? (optional)
+              </div>
+              <textarea
+                style={{
+                  width: '100%',
+                  padding: '4px 6px',
+                  fontSize: '18px',
+                  color: 'var(--pixel-text)',
+                  background: 'var(--pixel-bg)',
+                  border: '2px solid var(--pixel-border)',
+                  borderRadius: 0,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  minHeight: 60,
+                  resize: 'vertical',
+                }}
+                value={callInTask}
+                onChange={(e) => setCallInTask(e.target.value)}
+                placeholder="e.g. Fix the login bug..."
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setCallInAgent(null)}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '16px',
+                  color: 'var(--pixel-text)',
+                  background: 'var(--pixel-bg)',
+                  border: '2px solid var(--pixel-border)',
+                  borderRadius: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  vscode.postMessage({
+                    type: 'launchAgent',
+                    agentId: callInAgent.sessionId,
+                    callInTask: callInTask.trim() || undefined,
+                  })
+                  setCallInAgent(null)
+                }}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '16px',
+                  color: 'var(--pixel-agent-text)',
+                  background: 'var(--pixel-agent-bg)',
+                  border: '2px solid var(--pixel-agent-border)',
+                  borderRadius: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                Call In
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {showEmployeeFile && (
         <EmployeeFile
@@ -685,32 +794,47 @@ export function AgentSidebar({
                         gap: 4,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            background: 'rgba(255,255,255,0.1)',
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)' }}>
-                            {agent.name || agent.sessionId.slice(0, 8)}
-                          </span>
-                          {agent.roleShort && (
-                            <span style={{ fontSize: '16px', color: 'var(--pixel-accent)', marginLeft: 6, opacity: 0.7 }}>
-                              {agent.roleShort}
+                      <div style={{ overflow: 'hidden', flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: 'rgba(255,255,255,0.1)',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)' }}>
+                              {agent.name || agent.sessionId.slice(0, 8)}
                             </span>
-                          )}
-                        </span>
+                            {agent.roleShort && (
+                              <span style={{ fontSize: '16px', color: 'var(--pixel-accent)', marginLeft: 6, opacity: 0.7 }}>
+                                {agent.roleShort}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {agent.lastSessionEnd && (
+                          <div
+                            style={{
+                              fontSize: '14px',
+                              color: 'var(--pixel-text-dim)',
+                              paddingLeft: 10,
+                              marginTop: 1,
+                              opacity: 0.7,
+                            }}
+                          >
+                            Last active: {timeAgo(agent.lastSessionEnd)}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
                         <button
@@ -745,7 +869,8 @@ export function AgentSidebar({
                           onClick={(e) => {
                             e.stopPropagation()
                             if (agent.isPersistent) {
-                              vscode.postMessage({ type: 'launchAgent', agentId: agent.sessionId })
+                              setCallInAgent(agent)
+                              setCallInTask('')
                             } else {
                               vscode.postMessage({
                                 type: 'restartAgent',
@@ -764,9 +889,9 @@ export function AgentSidebar({
                             cursor: 'pointer',
                             flexShrink: 0,
                           }}
-                          title={agent.isPersistent ? 'Launch new session for this agent' : 'Resume this session in iTerm'}
+                          title={agent.isPersistent ? 'Call this agent back to work' : 'Resume this session in iTerm'}
                         >
-                          {agent.isPersistent ? 'Launch' : 'Resume'}
+                          {agent.isPersistent ? 'Call In' : 'Resume'}
                         </button>
                       </div>
                     </div>

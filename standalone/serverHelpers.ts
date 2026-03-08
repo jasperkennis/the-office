@@ -44,6 +44,8 @@ export function getOfflineAgents(agentManager: StandaloneAgentManager, persisten
 			isPersistent: true,
 			roleShort: pa.roleShort,
 			roleFull: pa.roleFull,
+			lastSessionEnd: pa.lastSessionEnd,
+			sessionCount: pa.sessionCount,
 		});
 	}
 
