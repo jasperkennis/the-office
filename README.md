@@ -30,7 +30,7 @@ This project is licensed under the [MIT License](LICENSE). I'm not superstitious
 
 ## Todos
 - [ ] Give every worker their own memory and tiny description of their expertise
-- [ ] Make it possible to "call into work" any employee that is currently away (reboot previous sessions)
+- [x] Make it possible to "call into work" any employee that is currently away (reboot previous sessions)
 - [ ] Ability to make the agents talk to eighother (conference room 5 minutes!)
 - [ ] Give every worker a job descriptoin and regular performance reviews
 
