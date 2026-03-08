@@ -6,7 +6,7 @@ That's what she said.
 
 This project is a fork of [Pixel Agents](https://github.com/pablodelucca/pixel-agents) by Pablo de Lucca.
 
-![Screenshot](webview-ui/public/Screenshot 2026-03-08 at 15.12.00.png)
+![Screenshot](webview-ui/public/screeny.png)
 
 ## Build & Run
 
