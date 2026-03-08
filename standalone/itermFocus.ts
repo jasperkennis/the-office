@@ -92,15 +92,20 @@ end run`;
 
 /**
  * Launch a new iTerm2 tab and run `claude` with a specific session ID and system prompt.
+ * If initialPrompt is provided, it's passed via --prompt so the agent starts working immediately.
  */
-export function launchAgentSession(sessionId: string, cwd: string, systemPrompt: string): boolean {
+export function launchAgentSession(sessionId: string, cwd: string, systemPrompt: string, initialPrompt?: string): boolean {
 	try {
 		const script = `
 on run argv
 	set sid to item 1 of argv
 	set cwd to item 2 of argv
 	set sysPrompt to item 3 of argv
+	set initialPrompt to item 4 of argv
 	set cmd to "cd " & quoted form of cwd & " && claude --session-id " & sid & " --append-system-prompt " & quoted form of sysPrompt
+	if initialPrompt is not "" then
+		set cmd to cmd & " --prompt " & quoted form of initialPrompt
+	end if
 	tell application "iTerm2"
 		activate
 		if (count of windows) = 0 then
@@ -118,7 +123,7 @@ on run argv
 		end if
 	end tell
 end run`;
-		execFileSync('osascript', ['-e', script, '--', sessionId, cwd, systemPrompt], {
+		execFileSync('osascript', ['-e', script, '--', sessionId, cwd, systemPrompt, initialPrompt || ''], {
 			encoding: 'utf-8',
 			timeout: 5000,
 		});

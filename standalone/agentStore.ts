@@ -17,6 +17,8 @@ export interface PersistentAgent {
 	hueShift?: number;
 	seatId?: string;
 	currentSessionId?: string;
+	lastSessionEnd?: string;
+	sessionCount?: number;
 }
 
 export function loadPersistentAgents(): PersistentAgent[] {
@@ -98,5 +100,14 @@ export function buildSystemPrompt(agent: PersistentAgent): string {
 		'Read this file at the start of each session to recall context from previous sessions.',
 		'Update it as you work with important decisions, progress, patterns, and context you want to remember across sessions.',
 	);
+	if (agent.sessionCount && agent.sessionCount > 0) {
+		lines.push(
+			'',
+			"You're returning to work. Check your memory file for context from your previous sessions.",
+		);
+		if (agent.lastSessionEnd) {
+			lines.push(`Your last session ended on ${agent.lastSessionEnd}.`);
+		}
+	}
 	return lines.join('\n');
 }

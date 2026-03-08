@@ -1,4 +1,4 @@
-# Plan: Make It Possible to "Call Into Work" Any Employee That Is Currently Away
+# Plan: Make It Possible to "Call Into Work" Any Employee That Is Currently Away — DONE
 
 ## Current State
 
@@ -82,13 +82,13 @@ Show offline agents as faded/ghost characters at their assigned seats:
 
 This is the most visually impactful change but also the most complex. It should be treated as a stretch goal.
 
-## Implementation Order
+## Implementation Status
 
-1. Phase 1 (trivial UI label change, immediate clarity improvement)
-2. Phase 2 (core feature — task assignment makes call-in useful)
-3. Phase 3 (small persistence change, enables Phase 4)
-4. Phase 4 (enhances returning agent experience)
-5. Phase 5 (visual polish, stretch goal)
+1. ~~Phase 1 (trivial UI label change, immediate clarity improvement)~~ — DONE
+2. ~~Phase 2 (core feature — task assignment makes call-in useful)~~ — DONE
+3. ~~Phase 3 (small persistence change, enables Phase 4)~~ — DONE (tracked in `server.ts` onSessionStale, not standaloneAgentManager)
+4. ~~Phase 4 (enhances returning agent experience)~~ — DONE
+5. Phase 5 (visual polish, stretch goal) — NOT IMPLEMENTED
 
 ## Files Involved
 

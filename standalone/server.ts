@@ -76,15 +76,15 @@ interface ServerContext {
 }
 
 // ── Launch helper (shared by saveAgentIdentity + launchAgent) ─
-function launchPersistentAgent(pa: PersistentAgent, persistentAgents: PersistentAgent[]): boolean {
+function launchPersistentAgent(pa: PersistentAgent, persistentAgents: PersistentAgent[], callInTask?: string): boolean {
 	const newSessionId = crypto.randomUUID();
 	pa.currentSessionId = newSessionId;
 	savePersistentAgents(persistentAgents);
 
 	const prompt = buildSystemPrompt(pa);
 	const cwd = pa.workspacePath || os.homedir();
-	console.log(`[Standalone] Launching agent "${pa.name}" with session ${newSessionId} in ${cwd}`);
-	return launchAgentSession(newSessionId, cwd, prompt);
+	console.log(`[Standalone] Launching agent "${pa.name}" with session ${newSessionId} in ${cwd}${callInTask ? ` with task: ${callInTask}` : ''}`);
+	return launchAgentSession(newSessionId, cwd, prompt, callInTask);
 }
 
 // ── Message handlers ─────────────────────────────────────────
@@ -284,13 +284,14 @@ function handleDeleteAgentIdentity(msg: Record<string, unknown>, ctx: ServerCont
 function handleLaunchAgent(msg: Record<string, unknown>, ctx: ServerContext): void {
 	const { persistentAgents } = ctx;
 	const agentId = msg.agentId as string;
+	const callInTask = msg.callInTask as string | undefined;
 	const pa = persistentAgents.find(p => p.id === agentId);
 	if (!pa) {
 		console.log(`[Standalone] Persistent agent ${agentId} not found`);
 		return;
 	}
 	ensureAgentMemory(agentId);
-	if (!launchPersistentAgent(pa, persistentAgents)) {
+	if (!launchPersistentAgent(pa, persistentAgents, callInTask)) {
 		console.log(`[Standalone] Failed to launch agent session for ${pa.name}`);
 	}
 }
@@ -446,6 +447,15 @@ async function main(): Promise<void> {
 			}
 		},
 		onSessionStale(jsonlFile) {
+			// Update persistent agent session history before removing
+			const sessionId = path.basename(jsonlFile, '.jsonl');
+			const pa = findPersistentAgentBySession(sessionId);
+			if (pa) {
+				pa.lastSessionEnd = new Date().toISOString();
+				pa.sessionCount = (pa.sessionCount || 0) + 1;
+				pa.currentSessionId = undefined;
+				savePersistentAgents(persistentAgents);
+			}
 			agentManager.removeSession(jsonlFile);
 			broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 		},

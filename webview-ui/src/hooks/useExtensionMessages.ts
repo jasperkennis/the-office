@@ -55,6 +55,8 @@ export interface OfflineAgent {
   isPersistent?: boolean
   roleShort?: string
   roleFull?: string
+  lastSessionEnd?: string
+  sessionCount?: number
 }
 
 export interface ExtensionMessageState {
