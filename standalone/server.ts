@@ -12,7 +12,7 @@ import {
 	loadWallTiles,
 	loadCharacterSprites,
 } from '../src/assetLoader.js';
-import { loadKnownProjects, addKnownProject, removeKnownProject } from '../src/projectStore.js';
+import { loadKnownProjects, addKnownProject, removeKnownProjectByName } from '../src/projectStore.js';
 import { SERVER_PORT } from './constants.js';
 import { ProjectScanner, decodeProjectHash } from './projectScanner.js';
 import { StandaloneAgentManager } from './standaloneAgentManager.js';
@@ -317,11 +317,11 @@ function handleForgetAgent(msg: Record<string, unknown>, ctx: ServerContext): vo
 	broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 }
 
-function handleRemoveRoom(_msg: Record<string, unknown>, ctx: ServerContext): void {
-	const workspacePath = _msg.workspacePath as string;
-	if (!workspacePath) return;
-	console.log(`[Standalone] Removing room for workspace: ${workspacePath}`);
-	removeKnownProject(workspacePath);
+function handleRemoveRoom(msg: Record<string, unknown>, ctx: ServerContext): void {
+	const roomName = msg.roomName as string;
+	if (!roomName) return;
+	console.log(`[Standalone] Removing room: ${roomName}`);
+	removeKnownProjectByName(roomName);
 	ctx.broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
 }
 

@@ -115,11 +115,12 @@ function groupByRoom(
 
 interface ConfirmDialogProps {
   message: string
+  confirmLabel?: string
   onConfirm: () => void
   onCancel: () => void
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
+function ConfirmDialog({ message, confirmLabel = 'Fire', onConfirm, onCancel }: ConfirmDialogProps) {
   return (
     <div
       style={{
@@ -178,7 +179,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
               cursor: 'pointer',
             }}
           >
-            Fire
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -405,7 +406,7 @@ export function AgentSidebar({
   const [editingOfflineAgent, setEditingOfflineAgent] = useState<OfflineAgent | undefined>(undefined)
   const [creatingForWorkspace, setCreatingForWorkspace] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
-  const [confirmRoomDelete, setConfirmRoomDelete] = useState<{ name: string; workspacePath: string } | null>(null)
+  const [confirmRoomDelete, setConfirmRoomDelete] = useState<{ name: string } | null>(null)
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
 
   const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
@@ -441,8 +442,9 @@ export function AgentSidebar({
       {confirmRoomDelete && (
         <ConfirmDialog
           message={`Remove room "${confirmRoomDelete.name}"?`}
+          confirmLabel="Remove"
           onConfirm={() => {
-            vscode.postMessage({ type: 'removeRoom', workspacePath: confirmRoomDelete.workspacePath })
+            vscode.postMessage({ type: 'removeRoom', roomName: confirmRoomDelete.name })
             setConfirmRoomDelete(null)
           }}
           onCancel={() => setConfirmRoomDelete(null)}
@@ -528,11 +530,11 @@ export function AgentSidebar({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {projectName || 'Unassigned'}
                   </span>
-                  {group.liveAgents.length === 0 && group.workspacePath && hoveredRoom === projectName && (
+                  {group.liveAgents.length === 0 && hoveredRoom === projectName && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        setConfirmRoomDelete({ name: projectName, workspacePath: group.workspacePath! })
+                        setConfirmRoomDelete({ name: projectName })
                       }}
                       title="Remove room"
                       style={deleteButtonStyle}
