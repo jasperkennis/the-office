@@ -88,7 +88,7 @@ function groupByRoom(
   // Seed with rooms from officeState + known projects (with workspace paths)
   for (const room of officeState.rooms) {
     const g = ensure(room.projectName)
-    if (room.isConferenceRoom) g.isSpecialRoom = true
+    if (room.isConferenceRoom || room.isWarehouse) g.isSpecialRoom = true
   }
   for (const kp of knownProjects) {
     const g = ensure(kp.name)
@@ -115,11 +115,12 @@ function groupByRoom(
 
 interface ConfirmDialogProps {
   message: string
+  confirmLabel?: string
   onConfirm: () => void
   onCancel: () => void
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
+function ConfirmDialog({ message, confirmLabel = 'Fire', onConfirm, onCancel }: ConfirmDialogProps) {
   return (
     <div
       style={{
@@ -178,7 +179,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
               cursor: 'pointer',
             }}
           >
-            Fire
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -405,6 +406,8 @@ export function AgentSidebar({
   const [editingOfflineAgent, setEditingOfflineAgent] = useState<OfflineAgent | undefined>(undefined)
   const [creatingForWorkspace, setCreatingForWorkspace] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
+  const [confirmRoomDelete, setConfirmRoomDelete] = useState<{ name: string } | null>(null)
+  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
 
   const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
 
@@ -434,6 +437,17 @@ export function AgentSidebar({
             setConfirmDelete(null)
           }}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+      {confirmRoomDelete && (
+        <ConfirmDialog
+          message={`Remove room "${confirmRoomDelete.name}"?`}
+          confirmLabel="Remove"
+          onConfirm={() => {
+            vscode.postMessage({ type: 'removeRoom', roomName: confirmRoomDelete.name })
+            setConfirmRoomDelete(null)
+          }}
+          onCancel={() => setConfirmRoomDelete(null)}
         />
       )}
       {showEmployeeFile && (
@@ -487,12 +501,17 @@ export function AgentSidebar({
         </div>
 
         {/* Agent list grouped by room */}
-        {!collapsed && (
+        {!collapsed && (() => {
+          const regularRooms = [...roomGroups.entries()].filter(([, g]) => !g.isSpecialRoom)
+          const specialRooms = [...roomGroups.entries()].filter(([, g]) => g.isSpecialRoom)
+          return (
           <div style={{ overflowY: 'auto', overflowX: 'hidden' }}>
-            {[...roomGroups.entries()].map(([projectName, group]) => (
+            {regularRooms.map(([projectName, group]) => (
               <div key={projectName}>
                 {/* Room header */}
                 <div
+                  onMouseEnter={() => setHoveredRoom(projectName)}
+                  onMouseLeave={() => setHoveredRoom(null)}
                   style={{
                     padding: '3px 6px',
                     fontSize: '16px',
@@ -503,9 +522,26 @@ export function AgentSidebar({
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     userSelect: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
                 >
-                  {projectName || 'Unassigned'}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {projectName || 'Unassigned'}
+                  </span>
+                  {group.liveAgents.length === 0 && hoveredRoom === projectName && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfirmRoomDelete({ name: projectName })
+                      }}
+                      title="Remove room"
+                      style={deleteButtonStyle}
+                    >
+                      {'\u2715'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Live agents in this room */}
@@ -759,8 +795,48 @@ export function AgentSidebar({
                 )}
               </div>
             ))}
+
+            {/* Special rooms (Conference, Warehouse) in a separate section */}
+            {specialRooms.length > 0 && (
+              <>
+                <div
+                  style={{
+                    padding: '3px 6px',
+                    fontSize: '14px',
+                    color: 'var(--pixel-text-dim)',
+                    borderBottom: '1px solid var(--pixel-border)',
+                    borderTop: '2px solid var(--pixel-border)',
+                    userSelect: 'none',
+                    opacity: 0.7,
+                  }}
+                >
+                  Common Areas
+                </div>
+                {specialRooms.map(([projectName, group]) => (
+                  <div key={projectName}>
+                    {/* Room header */}
+                    <div
+                      style={{
+                        padding: '3px 6px',
+                        fontSize: '16px',
+                        color: group.liveAgents.length > 0 ? 'var(--pixel-green)' : 'var(--pixel-text-dim)',
+                        background: group.liveAgents.length > 0 ? 'rgba(90, 200, 140, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                        borderBottom: '1px solid var(--pixel-border)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {projectName}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
-        )}
+          )
+        })()}
       </div>
     </>
   )

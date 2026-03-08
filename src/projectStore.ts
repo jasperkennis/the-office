@@ -57,6 +57,14 @@ export function removeKnownProject(workspacePath: string): void {
 	}
 }
 
+export function removeKnownProjectByName(name: string): void {
+	const projects = loadKnownProjects();
+	const filtered = projects.filter((p) => p.name !== name);
+	if (filtered.length !== projects.length) {
+		writeKnownProjects(filtered);
+	}
+}
+
 /** Get known projects filtered to those whose workspace path is in the current VS Code window */
 export function getKnownProjectsForWorkspace(workspaceFolderPaths: string[]): KnownProject[] {
 	const all = loadKnownProjects();

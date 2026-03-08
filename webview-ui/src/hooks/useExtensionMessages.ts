@@ -137,6 +137,9 @@ export function useExtensionMessages(
         const projects = msg.projects as KnownProject[]
         knownProjectsRef.current = projects
         setKnownProjects(projects)
+        if (layoutReadyRef.current) {
+          os.regenerateRoomLayout(projects)
+        }
       } else if (msg.type === 'layoutLoaded') {
         // Generate room layout from known projects and buffered agents
         // First add buffered agents so their project names are counted

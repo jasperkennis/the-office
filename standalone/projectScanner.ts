@@ -211,8 +211,10 @@ export class ProjectScanner {
 
 	/** Convert sanitized dir name back to a readable project name */
 	private deriveProjectName(dirName: string): string {
-		// Dir name is the workspace path with non-alphanumeric chars replaced by '-'
-		// Try to get the last meaningful segment
+		// Try to decode the full workspace path and use the last component
+		const decoded = decodeProjectHash(dirName);
+		if (decoded) return path.basename(decoded);
+		// Fallback: last non-empty segment
 		const parts = dirName.split('-').filter(p => p.length > 0);
 		if (parts.length === 0) return dirName;
 		return parts[parts.length - 1];

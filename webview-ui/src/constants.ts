@@ -80,6 +80,7 @@ export const ZOOM_LEVEL_HIDE_DELAY_MS = 2000
 export const ZOOM_LEVEL_FADE_DURATION_SEC = 0.5
 export const ZOOM_SCROLL_THRESHOLD = 50
 export const PAN_MARGIN_FRACTION = 0.25
+export const KEY_PAN_SPEED = 8
 
 // ── Editor ───────────────────────────────────────────────────
 export const UNDO_STACK_MAX_SIZE = 50
@@ -92,6 +93,7 @@ export const DEFAULT_NEUTRAL_COLOR: FloorColor = { h: 0, s: 0, b: 0, c: 0 }
 export const ROOM_HEIGHT = 7
 export const ROOM_LABEL_ROWS = 2
 export const ROOM_GAP_COLS = 2
+export const ROOM_GAP_ROWS = 2
 export const ROOM_MIN_SEATS = 4
 export const ROOM_EXTRA_SEATS = 2
 export const ROOM_MIN_INTERIOR_WIDTH = 6

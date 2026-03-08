@@ -12,7 +12,7 @@ import {
 	loadWallTiles,
 	loadCharacterSprites,
 } from '../src/assetLoader.js';
-import { loadKnownProjects, addKnownProject } from '../src/projectStore.js';
+import { loadKnownProjects, addKnownProject, removeKnownProjectByName } from '../src/projectStore.js';
 import { SERVER_PORT } from './constants.js';
 import { ProjectScanner, decodeProjectHash } from './projectScanner.js';
 import { StandaloneAgentManager } from './standaloneAgentManager.js';
@@ -317,6 +317,14 @@ function handleForgetAgent(msg: Record<string, unknown>, ctx: ServerContext): vo
 	broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 }
 
+function handleRemoveRoom(msg: Record<string, unknown>, ctx: ServerContext): void {
+	const roomName = msg.roomName as string;
+	if (!roomName) return;
+	console.log(`[Standalone] Removing room: ${roomName}`);
+	removeKnownProjectByName(roomName);
+	ctx.broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
+}
+
 function handleSetSoundEnabled(msg: Record<string, unknown>): void {
 	writeJson(SETTINGS_FILE, { soundEnabled: msg.enabled });
 }
@@ -331,6 +339,7 @@ const messageHandlers: Record<string, (ws: WebSocket, msg: Record<string, unknow
 	launchAgent: (_ws, msg, ctx) => handleLaunchAgent(msg, ctx),
 	restartAgent: (_ws, msg) => handleRestartAgent(msg),
 	forgetAgent: (_ws, msg, ctx) => handleForgetAgent(msg, ctx),
+	removeRoom: (_ws, msg, ctx) => handleRemoveRoom(msg, ctx),
 	setSoundEnabled: (_ws, msg) => handleSetSoundEnabled(msg),
 };
 
