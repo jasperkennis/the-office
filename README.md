@@ -33,5 +33,7 @@ This project is licensed under the [MIT License](LICENSE). I'm not superstitious
 - [x] Make it possible to "call into work" any employee that is currently away (reboot previous sessions)
 - [ ] Ability to make the agents talk to eighother (conference room 5 minutes!)
 - [ ] Give every worker a job descriptoin and regular performance reviews
+- [ ] Let the workers use project management tools (like clickup)
+    - [ ] If moving between stages, delegate between workers
 
 ![The Office](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExODg5bHdwNzE5YzBwejlkcnd5cGt2cjA4OW9heG1waHFvcDBoaDdoaSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/BY8ORoRpnJDXeBNwxg/giphy.gif)
