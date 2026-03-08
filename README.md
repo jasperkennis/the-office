@@ -22,7 +22,7 @@ Then open `http://localhost:3333` in your browser. Bears. Beets. Battlestar Gala
 
 ## Why
 
-Sometimes I'll start a coding session and I don't even know where it's going. I just hope I find it along the way.
+[Sometimes I'll start a coding session and I don't even know where it's going. I just hope I find it along the way.](https://www.youtube.com/watch?v=QT07vyf0HQM)
 
 ## License
 
