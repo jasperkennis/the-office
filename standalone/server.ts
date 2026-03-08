@@ -39,48 +39,8 @@ const WEBVIEW_DIR = path.join(__dirname, 'webview');
 // Assets directory
 const ASSETS_DIR = path.join(__dirname, 'assets');
 
-// ── Persistence helpers ──────────────────────────────────────
-function readJson(filePath: string): Record<string, unknown> | null {
-	try {
-		if (!fs.existsSync(filePath)) return null;
-		return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
-	} catch { return null; }
-}
-
-function writeJson(filePath: string, data: unknown): void {
-	try {
-		if (!fs.existsSync(SETTINGS_DIR)) {
-			fs.mkdirSync(SETTINGS_DIR, { recursive: true });
-		}
-		fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-	} catch (err) {
-		console.error(`[Standalone] Failed to write ${filePath}:`, err);
-	}
-}
-
-// ── Offline agents ───────────────────────────────────────────
-function getOfflineAgents(agentManager: StandaloneAgentManager, persistentAgents: PersistentAgent[]): OfflineAgent[] {
-	const liveSessionIds = agentManager.getLiveSessionIds();
-	const offline: OfflineAgent[] = [];
-
-	// Add persistent agents that aren't currently running
-	for (const pa of persistentAgents) {
-		if (pa.currentSessionId && liveSessionIds.has(pa.currentSessionId)) continue;
-		offline.push({
-			sessionId: pa.id,
-			name: pa.name,
-			projectName: pa.workspacePath ? path.basename(pa.workspacePath) : undefined,
-			workspacePath: pa.workspacePath,
-			palette: pa.palette,
-			hueShift: pa.hueShift,
-			isPersistent: true,
-			roleShort: pa.roleShort,
-			roleFull: pa.roleFull,
-		});
-	}
-
-	return offline;
-}
+// ── Persistence & offline agent helpers (extracted for testability) ──
+import { readJson, writeJson, getOfflineAgents } from './serverHelpers.js';
 
 // ── Pre-load assets ──────────────────────────────────────────
 interface PreloadedAssets {
@@ -462,7 +422,16 @@ async function main(): Promise<void> {
 					console.log(`[Standalone] Auto-persisted new agent "${pa.name}" (${pa.id}) for session ${sessionId}`);
 				}
 
-				agentManager.addSession(projectDir, jsonlFile, projectName, workspacePath, pa.id);
+				agentManager.addSession(projectDir, jsonlFile, projectName, workspacePath, pa.id, {
+					name: pa.name,
+					palette: pa.palette,
+					hueShift: pa.hueShift,
+					seatId: pa.seatId,
+					roleShort: pa.roleShort,
+					roleFull: pa.roleFull,
+					workspacePath: pa.workspacePath,
+					persistentAgentId: pa.id,
+				});
 				broadcastSink.postMessage({ type: 'knownProjects', projects: loadKnownProjects() });
 				broadcastSink.postMessage({ type: 'offlineAgents', agents: getOfflineAgents(agentManager, persistentAgents) });
 			}

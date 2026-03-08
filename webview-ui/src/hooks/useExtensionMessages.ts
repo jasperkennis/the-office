@@ -159,8 +159,10 @@ export function useExtensionMessages(
         const id = msg.id as number
         const sessionId = msg.sessionId as string | undefined
         const folderName = msg.folderName as string | undefined
-        // Check cached metadata for returning sessions
-        const m = sessionId ? cachedMeta[sessionId] : undefined
+        // Check cached metadata first, fall back to metadata embedded in the message
+        const cached = sessionId ? cachedMeta[sessionId] : undefined
+        const inline = msg.name ? { name: msg.name as string, palette: msg.palette as number | undefined, hueShift: msg.hueShift as number | undefined, seatId: msg.seatId as string | undefined, roleShort: msg.roleShort as string | undefined, roleFull: msg.roleFull as string | undefined, workspacePath: msg.workspacePath as string | undefined, persistentAgentId: msg.persistentAgentId as string | undefined } : undefined
+        const m = cached || inline
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
         setSelectedAgent(id)
         os.addAgent(id, m?.palette, m?.hueShift, m?.seatId, undefined, folderName, sessionId, m?.name)

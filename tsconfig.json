@@ -15,6 +15,7 @@
 		"dist",
 		"out",
 		"scripts",
-		"standalone"
+		"standalone",
+		"vitest.config.ts"
 	]
 }

@@ -65,7 +65,7 @@ export class StandaloneAgentManager {
 		return this.fileToAgent.has(jsonlFile);
 	}
 
-	addSession(projectDir: string, jsonlFile: string, projectName: string, workspacePath?: string, persistentAgentId?: string): void {
+	addSession(projectDir: string, jsonlFile: string, projectName: string, workspacePath?: string, persistentAgentId?: string, agentMeta?: Record<string, unknown>): void {
 		if (this.fileToAgent.has(jsonlFile)) return;
 
 		const sessionId = path.basename(jsonlFile, '.jsonl');
@@ -97,7 +97,7 @@ export class StandaloneAgentManager {
 		this.fileToAgent.set(jsonlFile, id);
 
 		console.log(`[Standalone] Agent ${id}: tracking ${projectName}/${sessionId}`);
-		this.delegatingSink.postMessage({ type: 'agentCreated', id, sessionId, folderName: projectName });
+		this.delegatingSink.postMessage({ type: 'agentCreated', id, sessionId, folderName: projectName, ...(agentMeta ?? {}) });
 
 		// Start watching from end of file (don't replay history)
 		// but peek at the tail to determine if the agent is currently active
