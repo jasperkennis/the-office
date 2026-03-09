@@ -82,7 +82,7 @@ export function generateRoomLayout(
 
   // ── Garage dimensions ──────────────────────────────────────────
   // One car per online agent, stacked vertically
-  const carCount = Math.max(totalAgents, 1)
+  const carCount = totalAgents
   // Interior height: each car slot = GARAGE_CAR_SLOT_HEIGHT tiles, + 1 top padding
   const garageInteriorHeight = 1 + carCount * GARAGE_CAR_SLOT_HEIGHT
   const garageHeight = Math.max(ROOM_HEIGHT, garageInteriorHeight + 2) // +2 for top/bottom walls
