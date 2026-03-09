@@ -238,6 +238,7 @@ export class OfficeState {
     const agentCounts = new Map<string, number>()
     for (const ch of this.characters.values()) {
       if (ch.isSubagent) continue
+      if (ch.matrixEffect === 'despawn') continue // don't count departing agents
       const name = ch.projectName || ch.folderName || ''
       if (name) {
         agentCounts.set(name, (agentCounts.get(name) || 0) + 1)
