@@ -18,6 +18,10 @@ import {
   WAREHOUSE_MIN_WIDTH,
   WAREHOUSE_FLOOR_COLOR,
   WAREHOUSE_MIN_CRATES,
+  GARAGE_ROOM_NAME,
+  GARAGE_WIDTH,
+  GARAGE_FLOOR_COLOR,
+  GARAGE_CAR_SLOT_HEIGHT,
 } from '../../constants.js'
 
 export interface RoomInfo {
@@ -32,6 +36,8 @@ export interface RoomInfo {
   isConferenceRoom?: boolean
   /** Whether this is the warehouse */
   isWarehouse?: boolean
+  /** Whether this is the garage */
+  isGarage?: boolean
 }
 
 export interface GeneratedLayout {
@@ -74,13 +80,27 @@ export function generateRoomLayout(
   const warehouseInteriorWidth = Math.max(WAREHOUSE_MIN_WIDTH - 2, 2 + crateCols)
   const warehouseWidth = warehouseInteriorWidth + 2
 
+  // ── Garage dimensions ──────────────────────────────────────────
+  // One car per online agent, stacked vertically
+  const carCount = Math.max(totalAgents, 1)
+  // Interior height: each car slot = GARAGE_CAR_SLOT_HEIGHT tiles, + 1 top padding
+  const garageInteriorHeight = 1 + carCount * GARAGE_CAR_SLOT_HEIGHT
+  const garageHeight = Math.max(ROOM_HEIGHT, garageInteriorHeight + 2) // +2 for top/bottom walls
+  const garageColOffset = GARAGE_WIDTH + ROOM_GAP_COLS // shift other rooms right
+
   // Layout dimensions: project rooms on row 1, special rooms on row 2
   const row1Height = ROOM_LABEL_ROWS + ROOM_HEIGHT
   const row2Height = ROOM_LABEL_ROWS + ROOM_HEIGHT
-  const totalRows = row1Height + ROOM_GAP_ROWS + row2Height
+  const baseRows = row1Height + ROOM_GAP_ROWS + row2Height
+  // Garage may extend beyond the two-row layout
+  const garageTopRow = ROOM_LABEL_ROWS
+  const garageTotalHeight = ROOM_LABEL_ROWS + garageHeight
+  const totalRows = Math.max(baseRows, garageTotalHeight)
+
   const projectColsTotal = roomSpecs.reduce((sum, r) => sum + r.roomWidth, 0) + ROOM_GAP_COLS * (roomSpecs.length - 1)
   const specialColsTotal = CONFERENCE_ROOM_WIDTH + ROOM_GAP_COLS + warehouseWidth
-  const totalCols = Math.max(projectColsTotal, specialColsTotal)
+  const rightSideCols = Math.max(projectColsTotal, specialColsTotal)
+  const totalCols = garageColOffset + rightSideCols
 
   // Initialize tiles with VOID
   const tiles: TileTypeVal[] = new Array(totalRows * totalCols).fill(TileType.VOID)
@@ -88,7 +108,75 @@ export function generateRoomLayout(
   const furniture: PlacedFurniture[] = []
   const rooms: RoomInfo[] = []
 
-  let colOffset = 0
+  // ── Garage ──────────────────────────────────────────────────────
+  // Tall room on the left with one Porsche per online agent
+  const garageCol = 0
+  const garageRow = garageTopRow
+
+  // Fill garage tiles
+  for (let r = 0; r < garageHeight; r++) {
+    for (let c = 0; c < GARAGE_WIDTH; c++) {
+      const tileRow = garageRow + r
+      const tileCol = garageCol + c
+      if (tileRow >= totalRows || tileCol >= totalCols) continue
+      const idx = tileRow * totalCols + tileCol
+
+      const isTopWall = r === 0
+      const isBottomWall = r === garageHeight - 1
+      const isLeftWall = c === 0
+      const isRightWall = c === GARAGE_WIDTH - 1
+
+      // Bottom wall with wide door
+      if (isBottomWall) {
+        const doorCenter = Math.floor(GARAGE_WIDTH / 2)
+        if (c === doorCenter || c === doorCenter - 1) {
+          tiles[idx] = TileType.FLOOR_1
+          tileColors[idx] = GARAGE_FLOOR_COLOR
+        } else {
+          tiles[idx] = TileType.WALL
+          tileColors[idx] = DEFAULT_WALL_COLOR
+        }
+        continue
+      }
+
+      if (isTopWall || isLeftWall || isRightWall) {
+        tiles[idx] = TileType.WALL
+        tileColors[idx] = DEFAULT_WALL_COLOR
+        continue
+      }
+
+      // Interior floor
+      tiles[idx] = TileType.FLOOR_1
+      tileColors[idx] = GARAGE_FLOOR_COLOR
+    }
+  }
+
+  // Place one Porsche per agent, stacked vertically
+  // Porsche footprint: 5x2 tiles — fits in the 5-tile interior (GARAGE_WIDTH - 2 walls)
+  for (let i = 0; i < carCount; i++) {
+    const carRow = garageRow + 1 + 1 + i * GARAGE_CAR_SLOT_HEIGHT // +1 wall, +1 top padding
+    const carCol = garageCol + 1 // skip left wall
+    furniture.push({
+      uid: `garage:porsche-${i}`,
+      type: FurnitureType.PORSCHE,
+      col: carCol,
+      row: carRow,
+    })
+  }
+
+  rooms.push({
+    projectName: GARAGE_ROOM_NAME,
+    col: garageCol,
+    row: garageRow,
+    width: GARAGE_WIDTH,
+    height: garageHeight,
+    seatUids: [],
+    activitySpots: [],
+    isGarage: true,
+  })
+
+  // ── Project Rooms ───────────────────────────────────────────────
+  let colOffset = garageColOffset
   for (const spec of roomSpecs) {
     const roomCol = colOffset
     const roomRow = ROOM_LABEL_ROWS
@@ -258,7 +346,7 @@ export function generateRoomLayout(
 
   // ── Conference Room ──────────────────────────────────────────
   // Shared room on second row, below project rooms
-  const confCol = 0
+  const confCol = garageColOffset
   const confRow = row1Height + ROOM_GAP_ROWS + ROOM_LABEL_ROWS
   const confWidth = CONFERENCE_ROOM_WIDTH
 

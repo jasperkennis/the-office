@@ -107,6 +107,7 @@ export const FurnitureType = {
   PC: 'pc',
   LAMP: 'lamp',
   CRATE: 'crate',
+  PORSCHE: 'porsche',
 } as const
 export type FurnitureType = (typeof FurnitureType)[keyof typeof FurnitureType]
 

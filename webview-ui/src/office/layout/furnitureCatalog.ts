@@ -10,6 +10,7 @@ import {
   PC_SPRITE,
   LAMP_SPRITE,
   CRATE_SPRITE,
+  PORSCHE_SPRITE,
 } from '../sprites/spriteData.js'
 
 export interface LoadedAssetData {
@@ -49,6 +50,7 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
   { type: FurnitureType.PC,         label: 'PC',         footprintW: 1, footprintH: 1, sprite: PC_SPRITE,           isDesk: false, category: 'electronics' },
   { type: FurnitureType.LAMP,       label: 'Lamp',       footprintW: 1, footprintH: 1, sprite: LAMP_SPRITE,         isDesk: false, category: 'decor' },
   { type: FurnitureType.CRATE,      label: 'Crate',      footprintW: 1, footprintH: 1, sprite: CRATE_SPRITE,        isDesk: false, category: 'storage' },
+  { type: FurnitureType.PORSCHE,    label: 'Porsche',    footprintW: 5, footprintH: 2, sprite: PORSCHE_SPRITE,      isDesk: false, category: 'misc' },
 
 ]
 

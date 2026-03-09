@@ -63,16 +63,16 @@ function getDotInfo(
   const status = agentStatuses[agentId]
 
   if (hasPermission) {
-    return { color: 'var(--pixel-status-permission)', pulse: false }
+    return { color: 'var(--pixel-status-permission)', pulse: true }
   }
   if (status === 'waiting') {
-    return { color: 'var(--pixel-status-permission)', pulse: false }
+    return { color: 'var(--pixel-status-waiting)', pulse: false }
   }
   if (isActive && hasActiveTools) {
-    return { color: 'var(--pixel-status-active)', pulse: true }
+    return { color: 'var(--pixel-status-active)', pulse: false }
   }
   if (isActive) {
-    return { color: 'var(--pixel-status-active)', pulse: true }
+    return { color: 'var(--pixel-status-active)', pulse: false }
   }
   return null
 }
@@ -100,7 +100,7 @@ function groupByRoom(
   // Seed with rooms from officeState + known projects (with workspace paths)
   for (const room of officeState.rooms) {
     const g = ensure(room.projectName)
-    if (room.isConferenceRoom || room.isWarehouse) g.isSpecialRoom = true
+    if (room.isConferenceRoom || room.isWarehouse || room.isGarage) g.isSpecialRoom = true
   }
   for (const kp of knownProjects) {
     const g = ensure(kp.name)
@@ -420,8 +420,18 @@ export function AgentSidebar({
   const [confirmDelete, setConfirmDelete] = useState<{ sessionId: string; name: string; isPersistent?: boolean } | null>(null)
   const [confirmRoomDelete, setConfirmRoomDelete] = useState<{ name: string } | null>(null)
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
+  const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set())
   const [callInAgent, setCallInAgent] = useState<OfflineAgent | null>(null)
   const [callInTask, setCallInTask] = useState('')
+
+  const toggleRoom = (name: string) => {
+    setCollapsedRooms((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
 
   const roomGroups = groupByRoom(agents, officeState, offlineAgents, knownProjects)
 
@@ -621,6 +631,7 @@ export function AgentSidebar({
                 <div
                   onMouseEnter={() => setHoveredRoom(projectName)}
                   onMouseLeave={() => setHoveredRoom(null)}
+                  onClick={() => toggleRoom(projectName)}
                   style={{
                     padding: '3px 6px',
                     fontSize: '18px',
@@ -634,10 +645,16 @@ export function AgentSidebar({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    cursor: 'pointer',
                   }}
                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {projectName || 'Unassigned'}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--pixel-text-dim)', flexShrink: 0 }}>
+                      {collapsedRooms.has(projectName) ? '\u25B6' : '\u25BC'}
+                    </span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {projectName || 'Unassigned'}
+                    </span>
                   </span>
                   {group.liveAgents.length === 0 && hoveredRoom === projectName && (
                     <button
@@ -654,7 +671,7 @@ export function AgentSidebar({
                 </div>
 
                 {/* Live agents in this room */}
-                {group.liveAgents.map((id) => {
+                {!collapsedRooms.has(projectName) && group.liveAgents.map((id) => {
                   const ch = officeState.characters.get(id)
                   if (!ch) return null
 
@@ -777,7 +794,7 @@ export function AgentSidebar({
                 })}
 
                 {/* Offline agents in this room */}
-                {group.offlineAgents.map((agent) => {
+                {!collapsedRooms.has(projectName) && group.offlineAgents.map((agent) => {
                   const isHovered = hoveredOffline === agent.sessionId
                   return (
                     <div
@@ -899,7 +916,7 @@ export function AgentSidebar({
                 })}
 
                 {/* + hire link per project room (not special rooms) */}
-                {!group.isSpecialRoom && (
+                {!collapsedRooms.has(projectName) && !group.isSpecialRoom && (
                   <div
                     onClick={() => {
                       setEditingAgentId(null)
