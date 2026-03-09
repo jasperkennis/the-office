@@ -183,7 +183,7 @@ export function ToolOverlay({
                 {ch.folderName && (
                   <span
                     style={{
-                      fontSize: '16px',
+                      fontSize: '18px',
                       color: 'var(--pixel-text-dim)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -207,7 +207,7 @@ export function ToolOverlay({
                     color: 'var(--pixel-close-text)',
                     cursor: 'pointer',
                     padding: '0 2px',
-                    fontSize: '26px',
+                    fontSize: '28px',
                     lineHeight: 1,
                     marginLeft: 2,
                     flexShrink: 0,

@@ -87,7 +87,7 @@ export function ZoomControls({ zoom, onZoomChange, isDebugMode, onToggleDebugMod
             borderRadius: 0,
             padding: '4px 12px',
             boxShadow: 'var(--pixel-shadow)',
-            fontSize: '26px',
+            fontSize: '28px',
             color: 'var(--pixel-text)',
             userSelect: 'none',
             opacity: fadeOut ? 0 : 1,

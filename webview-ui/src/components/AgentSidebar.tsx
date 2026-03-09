@@ -161,7 +161,7 @@ function ConfirmDialog({ message, confirmLabel = 'Fire', onConfirm, onCancel }: 
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <span style={{ fontSize: '18px', color: 'var(--pixel-text)' }}>
+        <span style={{ fontSize: '20px', color: 'var(--pixel-text)' }}>
           {message}
         </span>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -169,7 +169,7 @@ function ConfirmDialog({ message, confirmLabel = 'Fire', onConfirm, onCancel }: 
             onClick={onCancel}
             style={{
               padding: '4px 12px',
-              fontSize: '16px',
+              fontSize: '18px',
               color: 'var(--pixel-text)',
               background: 'var(--pixel-bg)',
               border: '2px solid var(--pixel-border)',
@@ -183,7 +183,7 @@ function ConfirmDialog({ message, confirmLabel = 'Fire', onConfirm, onCancel }: 
             onClick={onConfirm}
             style={{
               padding: '4px 12px',
-              fontSize: '16px',
+              fontSize: '18px',
               color: '#fff',
               background: '#c53030',
               border: '2px solid #9b2c2c',
@@ -203,7 +203,7 @@ const deleteButtonStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: 'var(--pixel-text-dim)',
-  fontSize: '14px',
+  fontSize: '16px',
   cursor: 'pointer',
   padding: '0 2px',
   flexShrink: 0,
@@ -267,7 +267,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '4px 6px',
-    fontSize: '18px',
+    fontSize: '20px',
     color: 'var(--pixel-text)',
     background: 'var(--pixel-bg)',
     border: '2px solid var(--pixel-border)',
@@ -277,7 +277,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath
   }
 
   const labelStyle: React.CSSProperties = {
-    fontSize: '16px',
+    fontSize: '18px',
     color: 'var(--pixel-text-dim)',
     marginBottom: 2,
   }
@@ -312,7 +312,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '22px', color: 'var(--pixel-text)', fontWeight: 'bold' }}>
+          <span style={{ fontSize: '24px', color: 'var(--pixel-text)', fontWeight: 'bold' }}>
             Employee File
           </span>
           <button
@@ -321,7 +321,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath
               background: 'none',
               border: 'none',
               color: 'var(--pixel-text-dim)',
-              fontSize: '20px',
+              fontSize: '22px',
               cursor: 'pointer',
               padding: '0 4px',
             }}
@@ -383,7 +383,7 @@ function EmployeeFile({ officeState, agentId, offlineAgent, defaultWorkspacePath
           onClick={handleSave}
           style={{
             padding: '6px 12px',
-            fontSize: '18px',
+            fontSize: '20px',
             color: 'var(--pixel-agent-text)',
             background: 'var(--pixel-agent-bg)',
             border: '2px solid var(--pixel-agent-border)',
@@ -492,18 +492,18 @@ export function AgentSidebar({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontSize: '22px', color: 'var(--pixel-text)', fontWeight: 'bold' }}>
+            <span style={{ fontSize: '24px', color: 'var(--pixel-text)', fontWeight: 'bold' }}>
               Call In {callInAgent.name || callInAgent.sessionId.slice(0, 8)}
             </span>
             <div>
-              <div style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', marginBottom: 2 }}>
+              <div style={{ fontSize: '18px', color: 'var(--pixel-text-dim)', marginBottom: 2 }}>
                 What should they work on? (optional)
               </div>
               <textarea
                 style={{
                   width: '100%',
                   padding: '4px 6px',
-                  fontSize: '18px',
+                  fontSize: '20px',
                   color: 'var(--pixel-text)',
                   background: 'var(--pixel-bg)',
                   border: '2px solid var(--pixel-border)',
@@ -524,7 +524,7 @@ export function AgentSidebar({
                 onClick={() => setCallInAgent(null)}
                 style={{
                   padding: '4px 12px',
-                  fontSize: '16px',
+                  fontSize: '18px',
                   color: 'var(--pixel-text)',
                   background: 'var(--pixel-bg)',
                   border: '2px solid var(--pixel-border)',
@@ -545,7 +545,7 @@ export function AgentSidebar({
                 }}
                 style={{
                   padding: '4px 12px',
-                  fontSize: '16px',
+                  fontSize: '18px',
                   color: 'var(--pixel-agent-text)',
                   background: 'var(--pixel-agent-bg)',
                   border: '2px solid var(--pixel-agent-border)',
@@ -601,10 +601,10 @@ export function AgentSidebar({
           }}
           onClick={() => setCollapsed((p) => !p)}
         >
-          <span style={{ fontSize: '20px', color: 'var(--pixel-text)', userSelect: 'none' }}>
+          <span style={{ fontSize: '22px', color: 'var(--pixel-text)', userSelect: 'none' }}>
             Employees ({agents.length})
           </span>
-          <span style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', userSelect: 'none', marginLeft: 6 }}>
+          <span style={{ fontSize: '18px', color: 'var(--pixel-text-dim)', userSelect: 'none', marginLeft: 6 }}>
             {collapsed ? '\u25B6' : '\u25BC'}
           </span>
         </div>
@@ -623,7 +623,7 @@ export function AgentSidebar({
                   onMouseLeave={() => setHoveredRoom(null)}
                   style={{
                     padding: '3px 6px',
-                    fontSize: '16px',
+                    fontSize: '18px',
                     color: group.liveAgents.length > 0 ? 'var(--pixel-green)' : 'var(--pixel-text-dim)',
                     background: group.liveAgents.length > 0 ? 'rgba(90, 200, 140, 0.08)' : 'rgba(255, 255, 255, 0.03)',
                     borderBottom: '1px solid var(--pixel-border)',
@@ -705,7 +705,7 @@ export function AgentSidebar({
                         >
                           <span
                             style={{
-                              fontSize: '20px',
+                              fontSize: '22px',
                               color: isSelected ? '#fff' : 'var(--pixel-text)',
                               fontWeight: isSelected ? 'bold' : undefined,
                             }}
@@ -715,7 +715,7 @@ export function AgentSidebar({
                           {ch.roleShort && (
                             <span
                               style={{
-                                fontSize: '16px',
+                                fontSize: '18px',
                                 color: 'var(--pixel-accent)',
                                 marginLeft: 6,
                               }}
@@ -760,7 +760,7 @@ export function AgentSidebar({
                       {(activity || isWaiting || isIdle) && (
                         <div
                           style={{
-                            fontSize: '16px',
+                            fontSize: '18px',
                             color: 'var(--pixel-text-dim)',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -812,11 +812,11 @@ export function AgentSidebar({
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            <span style={{ fontSize: '20px', color: 'var(--pixel-text-dim)' }}>
+                            <span style={{ fontSize: '22px', color: 'var(--pixel-text-dim)' }}>
                               {agent.name || agent.sessionId.slice(0, 8)}
                             </span>
                             {agent.roleShort && (
-                              <span style={{ fontSize: '16px', color: 'var(--pixel-accent)', marginLeft: 6, opacity: 0.7 }}>
+                              <span style={{ fontSize: '18px', color: 'var(--pixel-accent)', marginLeft: 6, opacity: 0.7 }}>
                                 {agent.roleShort}
                               </span>
                             )}
@@ -825,7 +825,7 @@ export function AgentSidebar({
                         {agent.lastSessionEnd && (
                           <div
                             style={{
-                              fontSize: '14px',
+                              fontSize: '16px',
                               color: 'var(--pixel-text-dim)',
                               paddingLeft: 10,
                               marginTop: 1,
@@ -881,7 +881,7 @@ export function AgentSidebar({
                           }}
                           style={{
                             padding: '2px 8px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             color: 'var(--pixel-agent-text)',
                             background: 'var(--pixel-agent-bg)',
                             border: '2px solid var(--pixel-agent-border)',
@@ -908,7 +908,7 @@ export function AgentSidebar({
                     }}
                     style={{
                       padding: '3px 6px 3px 16px',
-                      fontSize: '16px',
+                      fontSize: '18px',
                       color: 'var(--pixel-accent)',
                       cursor: 'pointer',
                       borderBottom: '1px solid var(--pixel-border)',
@@ -927,7 +927,7 @@ export function AgentSidebar({
                 <div
                   style={{
                     padding: '3px 6px',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: 'var(--pixel-text-dim)',
                     borderBottom: '1px solid var(--pixel-border)',
                     borderTop: '2px solid var(--pixel-border)',
@@ -943,7 +943,7 @@ export function AgentSidebar({
                     <div
                       style={{
                         padding: '3px 6px',
-                        fontSize: '16px',
+                        fontSize: '18px',
                         color: group.liveAgents.length > 0 ? 'var(--pixel-green)' : 'var(--pixel-text-dim)',
                         background: group.liveAgents.length > 0 ? 'rgba(90, 200, 140, 0.08)' : 'rgba(255, 255, 255, 0.03)',
                         borderBottom: '1px solid var(--pixel-border)',

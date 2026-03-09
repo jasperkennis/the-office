@@ -117,11 +117,11 @@ export function ConversationPanel({
             flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: '20px', color: 'var(--pixel-text)', userSelect: 'none' }}>
+        <span style={{ fontSize: '22px', color: 'var(--pixel-text)', userSelect: 'none' }}>
           {agentName}
         </span>
         {projectName && (
-          <span style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', userSelect: 'none' }}>
+          <span style={{ fontSize: '18px', color: 'var(--pixel-text-dim)', userSelect: 'none' }}>
             {projectName}
           </span>
         )}
@@ -133,7 +133,7 @@ export function ConversationPanel({
             border: 'none',
             color: 'var(--pixel-text-dim)',
             cursor: 'pointer',
-            fontSize: '16px',
+            fontSize: '18px',
             padding: '0 4px',
             userSelect: 'none',
           }}
@@ -155,7 +155,7 @@ export function ConversationPanel({
           }}
         >
           {entries.length === 0 ? (
-            <div style={{ fontSize: '16px', color: 'var(--pixel-text-dim)', padding: '8px 0', userSelect: 'none' }}>
+            <div style={{ fontSize: '18px', color: 'var(--pixel-text-dim)', padding: '8px 0', userSelect: 'none' }}>
               No conversation yet...
             </div>
           ) : (
@@ -171,13 +171,13 @@ function EntryRow({ entry }: { entry: ConversationEntry }) {
   switch (entry.kind) {
     case 'assistant_text':
       return (
-        <div style={{ fontSize: '16px', color: 'var(--pixel-text)', padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        <div style={{ fontSize: '18px', color: 'var(--pixel-text)', padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           {entry.content}
         </div>
       )
     case 'tool_use':
       return (
-        <div style={{ fontSize: '16px', color: 'var(--pixel-accent)', padding: '2px 0' }}>
+        <div style={{ fontSize: '18px', color: 'var(--pixel-accent)', padding: '2px 0' }}>
           <span style={{ opacity: 0.6 }}>{'\u2502'} </span>
           {entry.content}
         </div>
@@ -186,7 +186,7 @@ function EntryRow({ entry }: { entry: ConversationEntry }) {
       return (
         <div
           style={{
-            fontSize: '14px',
+            fontSize: '16px',
             color: 'var(--pixel-text-dim)',
             padding: '1px 0 1px 12px',
             fontFamily: 'monospace',
@@ -200,7 +200,7 @@ function EntryRow({ entry }: { entry: ConversationEntry }) {
       )
     case 'user_text':
       return (
-        <div style={{ fontSize: '16px', color: 'var(--pixel-green)', padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        <div style={{ fontSize: '18px', color: 'var(--pixel-green)', padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           <span style={{ opacity: 0.6 }}>&gt; </span>
           {entry.content}
         </div>

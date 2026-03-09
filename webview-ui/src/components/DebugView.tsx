@@ -37,7 +37,7 @@ function ToolLine({ tool }: { tool: ToolActivity }) {
   return (
     <span
       style={{
-        fontSize: '22px',
+        fontSize: '24px',
         opacity: tool.done ? 0.5 : 0.8,
         display: 'flex',
         alignItems: 'center',
@@ -80,7 +80,7 @@ export function DebugView({
             style={{
               borderRadius: 0,
               padding: '6px 10px',
-              fontSize: '26px',
+              fontSize: '28px',
               background: isSelected ? 'rgba(90, 140, 255, 0.25)' : undefined,
               color: isSelected ? '#fff' : undefined,
               fontWeight: isSelected ? 'bold' : undefined,
@@ -93,7 +93,7 @@ export function DebugView({
             style={{
               borderRadius: 0,
               padding: '6px 8px',
-              fontSize: '26px',
+              fontSize: '28px',
               opacity: 0.7,
               background: isSelected ? 'rgba(90, 140, 255, 0.25)' : undefined,
               color: isSelected ? '#fff' : undefined,
@@ -130,7 +130,7 @@ export function DebugView({
             {status === 'waiting' && !hasActiveTools && (
               <span
                 style={{
-                  fontSize: '22px',
+                  fontSize: '24px',
                   opacity: 0.85,
                   display: 'flex',
                   alignItems: 'center',
@@ -170,7 +170,7 @@ export function DebugView({
       }}
     >
       {/* Top padding so cards don't overlap the floating toolbar */}
-      <div style={{ padding: '12px 12px 12px', fontSize: '28px' }}>
+      <div style={{ padding: '12px 12px 12px', fontSize: '30px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {agents.map(renderAgentCard)}
         </div>

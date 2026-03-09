@@ -20,6 +20,13 @@ npm run build:standalone && npm run standalone
 
 Then open `http://localhost:3333` in your browser. Bears. Beets. Battlestar Galactica. Localhost:3333.
 
+To start a new agent that can be recognized and persisted in the Office, you can use the `cl` command that you can register in your `.bashrc`/`.zshrc`:
+
+```bash
+# Start Claude with a random session ID (visible to pixel-agents standalone)
+cl() { claude --session-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" "$@"; }
+```
+
 ## Why
 
 [Sometimes I'll start a coding session and I don't even know where it's going. I just hope I find it along the way.](https://www.youtube.com/watch?v=QT07vyf0HQM)

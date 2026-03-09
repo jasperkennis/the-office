@@ -15,7 +15,7 @@ const menuItemBase: React.CSSProperties = {
   justifyContent: 'space-between',
   width: '100%',
   padding: '6px 10px',
-  fontSize: '24px',
+  fontSize: '26px',
   color: 'rgba(255, 255, 255, 0.8)',
   background: 'transparent',
   border: 'none',
@@ -72,7 +72,7 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
             marginBottom: '4px',
           }}
         >
-          <span style={{ fontSize: '24px', color: 'rgba(255, 255, 255, 0.9)' }}>Settings</span>
+          <span style={{ fontSize: '26px', color: 'rgba(255, 255, 255, 0.9)' }}>Settings</span>
           <button
             onClick={onClose}
             onMouseEnter={() => setHovered('close')}
@@ -82,7 +82,7 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
               border: 'none',
               borderRadius: 0,
               color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '24px',
+              fontSize: '26px',
               cursor: 'pointer',
               padding: '0 4px',
               lineHeight: 1,
@@ -134,7 +134,7 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '12px',
+              fontSize: '14px',
               lineHeight: 1,
               color: '#fff',
             }}

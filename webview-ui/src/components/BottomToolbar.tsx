@@ -9,7 +9,7 @@ interface BottomToolbarProps {
 
 const btnBase: React.CSSProperties = {
   padding: '5px 12px',
-  fontSize: '24px',
+  fontSize: '26px',
   color: 'var(--pixel-text)',
   background: 'var(--pixel-btn-bg)',
   border: '2px solid transparent',
@@ -61,7 +61,7 @@ export function BottomToolbar({
           bottom: 6,
           left: 8,
           zIndex: 'var(--pixel-controls-z)',
-          fontSize: '18px',
+          fontSize: '20px',
           color: 'var(--pixel-text-dim)',
           userSelect: 'none',
           pointerEvents: 'none',
@@ -125,7 +125,7 @@ export function BottomToolbar({
                   width: '100%',
                   textAlign: 'left',
                   padding: '6px 10px',
-                  fontSize: '22px',
+                  fontSize: '24px',
                   color: 'var(--pixel-text)',
                   background: hoveredFolder === i ? 'var(--pixel-btn-hover-bg)' : 'transparent',
                   border: 'none',
