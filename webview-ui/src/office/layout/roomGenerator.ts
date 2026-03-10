@@ -151,14 +151,23 @@ export function generateRoomLayout(
     }
   }
 
-  // Place one Porsche per agent, stacked vertically
-  // Porsche footprint: 5x2 tiles — fits in the 5-tile interior (GARAGE_WIDTH - 2 walls)
+  // Place one random car per agent, stacked vertically
+  // All cars fit within the 5-tile interior (GARAGE_WIDTH - 2 walls)
+  const carTypes = [
+    FurnitureType.PORSCHE,
+    FurnitureType.LAMBO,
+    FurnitureType.FERRARI,
+    FurnitureType.MULTIPLA,
+    FurnitureType.MASSERATI,
+    FurnitureType.RANGE_ROVER,
+  ]
   for (let i = 0; i < carCount; i++) {
+    const carType = carTypes[Math.floor(Math.random() * carTypes.length)]
     const carRow = garageRow + 1 + 1 + i * GARAGE_CAR_SLOT_HEIGHT // +1 wall, +1 top padding
     const carCol = garageCol + 1 // skip left wall
     furniture.push({
-      uid: `garage:porsche-${i}`,
-      type: FurnitureType.PORSCHE,
+      uid: `garage:car-${i}`,
+      type: carType,
       col: carCol,
       row: carRow,
     })

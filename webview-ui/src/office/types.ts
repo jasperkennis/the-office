@@ -108,6 +108,11 @@ export const FurnitureType = {
   LAMP: 'lamp',
   CRATE: 'crate',
   PORSCHE: 'porsche',
+  LAMBO: 'lambo',
+  FERRARI: 'ferrari',
+  MULTIPLA: 'multipla',
+  MASSERATI: 'masserati',
+  RANGE_ROVER: 'range_rover',
 } as const
 export type FurnitureType = (typeof FurnitureType)[keyof typeof FurnitureType]
 
